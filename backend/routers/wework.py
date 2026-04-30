@@ -16,7 +16,7 @@ WEWORK_AGENT_SECRET = "AaExshvmH1AzprG7Y0yiz1JToKfYW8Jfk_6YVq0mBcY"
 async def wework_redirect():
     """生成企业微信授权跳转URL"""
     redirect_uri = "https://report.zjamp.com/api/auth/wework/callback"
-    url = f"https://open.work.weixin.qq.com/wwopen/sso/qq_connect?appid={WEWORK_CORP_ID}&agentid={WEWORK_AGENT_ID}&redirect_uri={redirect_uri}&state=1"
+    url = f"https://open.weixin.qq.com/connect/oauth2/authorize?appid={WEWORK_CORP_ID}&agentid={WEWORK_AGENT_ID}&redirect_uri={redirect_uri}&state=1"
     return {"redirect_url": url}
 
 @router.get("/wework/callback")
@@ -79,4 +79,3 @@ async def get_wework_access_token() -> str:
         if data.get("errcode") != 0:
             raise HTTPException(status_code=500, detail="Failed to get WeChat Work access token")
         return data.get("access_token")
-
