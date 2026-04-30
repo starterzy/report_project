@@ -78,6 +78,7 @@ async def wework_callback(code: str = None, state: str = None, db: Session = Dep
             }
         }
 
+        print(f"[INFO] SSO登录成功: userid={wework_userid}, username={user.username}, phone={user.phone}")
         return success_html(json.dumps(login_data))
     except Exception as e:
         return error_html(str(e))
@@ -93,7 +94,7 @@ def success_html(data: str) -> HTMLResponse:
     <body>
         <script>
             localStorage.setItem('token', '{data}');
-            window.location.href = 'https://report.zjamp.com/#/';
+            window.location.href = 'https://report.zjamp.com/';
         </script>
     </body>
     </html>
