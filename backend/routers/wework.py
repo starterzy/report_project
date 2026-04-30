@@ -15,10 +15,10 @@ WEWORK_AGENT_ID = "1000145"
 WEWORK_AGENT_SECRET = "AaExshvmH1AzprG7Y0yiz1JToKfYW8Jfk_6YVq0mBcY"
 
 def get_oauth_url() -> str:
-    """生成企微OAuth授权URL（企业版）"""
-    redirect_uri = "https://report.zjamp.com/api/auth/wework/callback"
-    # 使用企业版OAuth URL
-    return f"https://open.weixin.qq.com/connect/oauth2/authorize?appid={WEWORK_CORP_ID}&redirect_uri={redirect_uri}&state=1"
+    """生成企微OAuth授权URL"""
+    from urllib.parse import quote
+    redirect_uri = quote("https://report.zjamp.com/api/auth/wework/callback", safe='')
+    return f"https://open.weixin.qq.com/connect/oauth2/authorize?appid={WEWORK_CORP_ID}&redirect_uri={redirect_uri}&response_type=code&scope=snsapi_base&state=1#wechat_redirect"
 
 @router.get("/wework/auto-login")
 async def wework_auto_login():
