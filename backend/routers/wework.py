@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 import httpx
 from backend.models import get_db, User
@@ -14,12 +14,20 @@ WEWORK_CORP_ID = "wwbf3d667dc5365208"
 WEWORK_AGENT_ID = "1000145"
 WEWORK_AGENT_SECRET = "AaExshvmH1AzprG7Y0yiz1JToKfYW8Jfk_6YVq0mBcY"
 
+def get_oauth_url() -> str:
+    """生成企微OAuth授权URL"""
+    redirect_uri = "https://report.zjamp.com/api/auth/wework/callback"
+    return f"https://open.weixin.qq.com/connect/oauth2/authorize?appid={WEWORK_CORP_ID}&redirect_uri={redirect_uri}&response_type=code&scope=snsapi_base&state=1#wechat_redirect"
+
+@router.get("/wework/auto-login")
+async def wework_auto_login():
+    """自动登录端点 - 访问时直接跳转企微授权页（用于企微应用首页地址）"""
+    return RedirectResponse(url=get_oauth_url())
+
 @router.get("/wework/redirect")
 async def wework_redirect():
     """生成企业微信授权跳转URL"""
-    redirect_uri = "https://report.zjamp.com/api/auth/wework/callback"
-    url = f"https://open.weixin.qq.com/connect/oauth2/authorize?appid={WEWORK_CORP_ID}&agentid={WEWORK_AGENT_ID}&redirect_uri={redirect_uri}&state=1"
-    return {"redirect_url": url}
+    return {"redirect_url": get_oauth_url()}
 
 @router.get("/wework/callback", response_class=HTMLResponse)
 async def wework_callback(code: str, db: Session = Depends(get_db)):
