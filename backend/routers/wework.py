@@ -15,9 +15,10 @@ WEWORK_AGENT_ID = "1000145"
 WEWORK_AGENT_SECRET = "AaExshvmH1AzprG7Y0yiz1JToKfYW8Jfk_6YVq0mBcY"
 
 def get_oauth_url() -> str:
-    """生成企微OAuth授权URL"""
+    """生成企微OAuth授权URL（企业版）"""
     redirect_uri = "https://report.zjamp.com/api/auth/wework/callback"
-    return f"https://open.weixin.qq.com/connect/oauth2/authorize?appid={WEWORK_CORP_ID}&redirect_uri={redirect_uri}&response_type=code&scope=snsapi_base&state=1#wechat_redirect"
+    # 使用企业版OAuth URL
+    return f"https://open.work.weixin.qq.com/wwopen/sso/qq_connect?appid={WEWORK_CORP_ID}&agentid={WEWORK_AGENT_ID}&redirect_uri={redirect_uri}&state=1"
 
 @router.get("/wework/auto-login")
 async def wework_auto_login():
@@ -30,15 +31,32 @@ async def wework_redirect():
     return {"redirect_url": get_oauth_url()}
 
 @router.get("/wework/callback", response_class=HTMLResponse)
-async def wework_callback(code: str, db: Session = Depends(get_db)):
+async def wework_callback(code: str = None, state: str = None, db: Session = Depends(get_db)):
     """企业微信OAuth2回调，处理单点登录"""
+    print(f"[DEBUG] Callback received: code={code}, state={state}")
+
+    if not code:
+        print("[DEBUG] No code provided")
+        return error_html("授权码无效，请重试")
+
     try:
+        # 获取用户身份标识
         wework_userid = await get_wework_userid(code)
+        print(f"[DEBUG] wework_userid: {wework_userid}")
+
         if not wework_userid:
+            print(f"[DEBUG] Failed to get userid for code: {code}")
             return error_html("无法获取企业微信用户身份")
 
+        # 查询本地用户 - 使用 phone 字段匹配 wework_userid
         user = db.query(User).filter(User.phone == wework_userid).first()
+        print(f"[DEBUG] User query result: {user}")
+
         if not user:
+            print(f"[DEBUG] No user found with phone={wework_userid}")
+            # 调试：打印所有用户的phone
+            all_phones = [u.phone for u in db.query(User).all()]
+            print(f"[DEBUG] All user phones in DB: {all_phones}")
             return error_html("该用户未注册，请联系管理员授权")
 
         if not user.is_active:
@@ -101,19 +119,29 @@ def error_html(message: str) -> HTMLResponse:
     return HTMLResponse(content=html)
 
 async def get_wework_userid(code: str) -> str:
-    """通过code获取企业微信用户userid"""
+    """通过code获取企业微信用户userid（企业OAuth）"""
+    print(f"[DEBUG] get_wework_userid called with code: {code}")
+
+    # 企业OAuth使用corp API获取UserId
     access_token = await get_wework_access_token()
+    print(f"[DEBUG] Got access token: {access_token[:20]}...")
+
+    # 使用corp API的getuserinfo接口，直接传code
     url = "https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo"
     params = {
         "access_token": access_token,
         "code": code
     }
+    print(f"[DEBUG] Calling getuserinfo with code...")
+
     async with httpx.AsyncClient() as client:
         response = await client.get(url, params=params)
         data = response.json()
+        print(f"[DEBUG] getuserinfo response: {data}")
+
         if data.get("errcode") != 0:
+            print(f"[DEBUG] errcode: {data.get('errcode')}, errmsg: {data.get('errmsg')}")
             return None
-        # UserId is the user identity in WeChat Work
         return data.get("UserId")
 
 async def get_wework_access_token() -> str:
