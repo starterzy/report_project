@@ -18,7 +18,7 @@ def get_oauth_url() -> str:
     """生成企微OAuth授权URL（企业版）"""
     redirect_uri = "https://report.zjamp.com/api/auth/wework/callback"
     # 使用企业版OAuth URL
-    return f"https://open.work.weixin.qq.com/wwopen/sso/qq_connect?appid={WEWORK_CORP_ID}&agentid={WEWORK_AGENT_ID}&redirect_uri={redirect_uri}&state=1"
+    return f"https://open.weixin.qq.com/connect/oauth2/authorize?appid={WEWORK_CORP_ID}&redirect_uri={redirect_uri}&state=1"
 
 @router.get("/wework/auto-login")
 async def wework_auto_login():
