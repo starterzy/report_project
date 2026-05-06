@@ -38,13 +38,13 @@
       :span-method="spanMethod"
       stripe
       border
-      height="calc(100vh - 130px)"
+      height="95%"
       class="compact-table"
     >
       <!-- 列0-6: 按 measure 分行，task 内合并 -->
       <el-table-column prop="sequence" label="序号" width="40" align="center" fixed />
       <el-table-column prop="taskName" label="重点工作" width="90" fixed />
-      <el-table-column prop="target" label="主要目标任务" min-width="180" fixed />
+      <el-table-column prop="target" label="主要目标任务" min-width="150" fixed />
       <el-table-column label="牵头领导" min-width="35">
         <template #default="{ row }">
           <div class="line-break compact-cell">{{ row.leader }}</div>
@@ -72,11 +72,12 @@
       <el-table-column prop="specificMeasures" label="具体举措" min-width="150" />
 
       <!-- 列10-11: 本月/下月 - 按 task 合并显示 -->
-      <el-table-column label="本月工作内容" min-width="300">
+      <el-table-column label="本月工作内容" min-width="250">
         <template #default="{ row }">
           <template v-if="row._isFirstRow">
             <span v-if="authStore.isLeader" class="cell-text">{{ row.currentContent || '-' }}</span>
             <span v-else-if="row.status && row.status !== 'draft'" class="cell-text">{{ row.currentContent || '-' }}</span>
+            <span v-else-if="!canEditRow(row)" class="cell-text readonly-text">{{ row.currentContent || '-' }}</span>
             <el-input
               v-else
               v-model="row.currentContent"
@@ -89,11 +90,12 @@
           </template>
         </template>
       </el-table-column>
-      <el-table-column label="下月工作计划" min-width="300">
+      <el-table-column label="下月工作计划" min-width="250">
         <template #default="{ row }">
           <template v-if="row._isFirstRow">
             <span v-if="authStore.isLeader" class="cell-text">{{ row.nextPlan || '-' }}</span>
             <span v-else-if="row.status && row.status !== 'draft'" class="cell-text">{{ row.nextPlan || '-' }}</span>
+            <span v-else-if="!canEditRow(row)" class="cell-text readonly-text">{{ row.nextPlan || '-' }}</span>
             <el-input
               v-else
               v-model="row.nextPlan"
@@ -120,15 +122,18 @@
       <el-table-column v-if="!authStore.isLeader" label="操作" width="140" align="center">
         <template #default="{ row }">
           <template v-if="row._isFirstRow">
-            <template v-if="!row.status || row.status === 'draft'">
+            <template v-if="(!row.status || row.status === 'draft') && canEditRow(row)">
               <el-button type="primary" size="small" @click="saveRow(row)">保存</el-button>
               <el-button type="success" size="small" @click="submitRow(row)">提交</el-button>
             </template>
             <template v-else-if="row.status === 'submitted'">
               <span style="color: #909399; font-size: 12px">待审批</span>
             </template>
-            <template v-else>
+            <template v-else-if="row.status === 'approved'">
               <span style="color: #67c23a; font-size: 12px">已审核</span>
+            </template>
+            <template v-else>
+              <span style="color: #909399; font-size: 12px">无权限</span>
             </template>
           </template>
         </template>
@@ -279,6 +284,25 @@ function statusText(status) {
   return map[status] || '未填报'
 }
 
+function canEditRow(row) {
+  // admin 和 approver 可以编辑所有行
+  if (authStore.isAdmin || authStore.isApprover) {
+    return true
+  }
+  // filler 根据 filler_sequences 判断权限
+  if (authStore.isFiller) {
+    const sequences = authStore.fillerSequences
+    // 如果没有设置限制序列，可以编辑所有行
+    if (!sequences || sequences.length === 0) {
+      return true
+    }
+    // 如果设置了的限制序列，检查当前行序号是否在允许范围内
+    return sequences.includes(row.sequence)
+  }
+  // 其他角色（leader）不允许编辑
+  return false
+}
+
 async function fetchTasks() {
   try {
     tasks.value = await reportApi.getTasks()
@@ -411,15 +435,18 @@ onMounted(fetchData)
 
 <style scoped>
 .tasks-container {
-  height: 100%;
+  height: 95vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .compact-title {
-  margin: 0 0 4px 0;
+  margin: 0 0 2px 0;
   font-size: 14px;
   font-weight: 500;
 }
 .search-form {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .search-form .el-form-item {
   margin-bottom: 0;
@@ -462,6 +489,28 @@ onMounted(fetchData)
   white-space: normal;
   word-break: break-word;
   overflow-wrap: break-word;
+  /* 滚动条样式 - 加粗 */
+  scrollbar-width: thick;
+  scrollbar-color: #909399 #f5f7fa;
+}
+/* Chrome/Safari/Edge 滚动条 */
+.compact-input textarea::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.compact-input textarea::-webkit-scrollbar-track {
+  background: #f5f7fa;
+  border-radius: 6px;
+}
+.compact-input textarea::-webkit-scrollbar-thumb {
+  background: #909399;
+  border-radius: 6px;
+}
+.compact-input textarea::-webkit-scrollbar-thumb:hover {
+  background: #606266;
+}
+.readonly-text {
+  color: #909399;
 }
 </style>
 

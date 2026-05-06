@@ -17,12 +17,10 @@
           </el-button>
         </el-form-item>
       </el-form>
-      <div class="demo-accounts">
-        <p>测试账号：</p>
-        <p>filler / filler123 (填报者)</p>
-        <p>approver / approver123 (审批者)</p>
-        <p>leader1 / leader123 (领导)</p>
-      </div>
+      <el-divider>或</el-divider>
+      <el-button type="success" style="width: 100%" @click="handleWeWorkLogin">
+        企业微信登录
+      </el-button>
     </el-card>
   </div>
 </template>
@@ -32,6 +30,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { ElMessage } from 'element-plus'
+import { authApi } from '../api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -52,6 +51,15 @@ async function handleLogin() {
     ElMessage.error('登录失败：' + (e.response?.data?.detail || e.message))
   } finally {
     loading.value = false
+  }
+}
+
+async function handleWeWorkLogin() {
+  try {
+    const response = await authApi.weworkRedirect()
+    window.location.href = response.redirect_url
+  } catch (e) {
+    ElMessage.error('获取登录跳转链接失败')
   }
 }
 </script>

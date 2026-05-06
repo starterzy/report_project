@@ -1,15 +1,22 @@
 import bcrypt
+import os
+import re
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from backend.models import get_db, User, RoleEnum
 
-SECRET_KEY = "your-secret-key-change-in-production"
+SECRET_KEY = os.environ.get("SECRET_KEY", "fallback-key-CHANGE-THIS-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Rate limiting: {ip: (count, reset_time)}
+login_attempts = {}
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 

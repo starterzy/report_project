@@ -61,6 +61,11 @@
               <span>{{ row.approver_sequences?.join(', ') || '-' }}</span>
             </template>
           </el-table-column>
+          <el-table-column prop="filler_sequences" label="可填报序号" width="150">
+            <template #default="{ row }">
+              <span>{{ row.filler_sequences?.join(', ') || '-' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="is_active" label="状态" width="80">
             <template #default="{ row }">
               <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">
@@ -108,6 +113,11 @@
             <el-option v-for="seq in sequences" :key="seq" :label="`序号 ${seq}`" :value="seq" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="userForm.roles.includes('filler')" label="可填报序号">
+          <el-select v-model="userForm.filler_sequence_ids" multiple placeholder="选择可填报的序号（不选则可填报全部）" style="width: 100%">
+            <el-option v-for="seq in sequences" :key="seq" :label="`序号 ${seq}`" :value="seq" />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="userDialogVisible = false">取消</el-button>
@@ -140,7 +150,8 @@ const userForm = ref({
   phone: '',
   roles: [],
   department_ids: [],
-  approver_sequence_ids: []
+  approver_sequence_ids: [],
+  filler_sequence_ids: []
 })
 
 function roleText(role) {
@@ -191,6 +202,9 @@ function onRolesChange() {
   if (!userForm.value.roles.includes('approver')) {
     userForm.value.approver_sequence_ids = []
   }
+  if (!userForm.value.roles.includes('filler')) {
+    userForm.value.filler_sequence_ids = []
+  }
 }
 
 function openUserDialog(user = null) {
@@ -204,7 +218,8 @@ function openUserDialog(user = null) {
       phone: user.phone || '',
       roles: [...user.roles],
       department_ids: [],
-      approver_sequence_ids: [...(user.approver_sequences || [])]
+      approver_sequence_ids: [...(user.approver_sequences || [])],
+      filler_sequence_ids: [...(user.filler_sequences || [])]
     }
   } else {
     isEdit.value = false
@@ -215,7 +230,8 @@ function openUserDialog(user = null) {
       phone: '',
       roles: ['filler'],
       department_ids: [],
-      approver_sequence_ids: []
+      approver_sequence_ids: [],
+      filler_sequence_ids: []
     }
   }
   userDialogVisible.value = true
@@ -233,7 +249,9 @@ async function saveUser() {
       if (userForm.value.phone !== undefined) data.phone = userForm.value.phone
       if (userForm.value.roles.length) data.roles = userForm.value.roles
       if (userForm.value.department_ids.length) data.department_ids = userForm.value.department_ids
-      if (userForm.value.approver_sequence_ids.length) data.approver_sequence_ids = userForm.value.approver_sequence_ids
+      // 总是发送序号数组，空数组表示清除所有限制
+      data.approver_sequence_ids = userForm.value.approver_sequence_ids || []
+      data.filler_sequence_ids = userForm.value.filler_sequence_ids || []
       await userApi.updateUser(userForm.value.id, data)
       ElMessage.success('更新成功')
     } else {

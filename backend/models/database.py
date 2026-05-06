@@ -38,6 +38,7 @@ class User(Base):
     is_active = Column(Integer, default=1)
     user_departments = relationship("UserDepartment", back_populates="user")
     approver_sequences = relationship("UserApproverSequence", back_populates="user", cascade="all, delete-orphan")
+    filler_sequences = relationship("UserFillerSequence", back_populates="user", cascade="all, delete-orphan")
     submitted_records = relationship("ReportRecord", back_populates="submitter", foreign_keys="ReportRecord.submitter_id")
     reviewed_records = relationship("ReportRecord", back_populates="reviewer", foreign_keys="ReportRecord.reviewer_id")
 
@@ -55,6 +56,13 @@ class UserApproverSequence(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     sequence = Column(Integer, nullable=False)  # 审批者有权限的序号
     user = relationship("User", back_populates="approver_sequences")
+
+class UserFillerSequence(Base):
+    __tablename__ = "user_filler_sequences"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    sequence = Column(Integer, nullable=False)  # 填报者可填报的序号
+    user = relationship("User", back_populates="filler_sequences")
 
 class TaskLeader(Base):
     __tablename__ = "task_leaders"

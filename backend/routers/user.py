@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from backend.models import get_db, User, Department, UserDepartment, UserApproverSequence, RoleEnum
+from backend.models import get_db, User, Department, UserDepartment, UserApproverSequence, UserFillerSequence, RoleEnum
 from backend.services.auth_service import get_current_user, get_password_hash
 from pydantic import BaseModel
 
@@ -13,6 +13,7 @@ class UserCreate(BaseModel):
     roles: List[str] = []
     department_ids: List[int] = []
     approver_sequence_ids: List[int] = []
+    filler_sequence_ids: List[int] = []
     phone: Optional[str] = None
 
 class UserUpdate(BaseModel):
@@ -21,6 +22,7 @@ class UserUpdate(BaseModel):
     roles: Optional[List[str]] = None
     department_ids: Optional[List[int]] = None
     approver_sequence_ids: Optional[List[int]] = None
+    filler_sequence_ids: Optional[List[int]] = None
     phone: Optional[str] = None
     is_active: Optional[int] = None
 
@@ -30,6 +32,7 @@ class UserResponse(BaseModel):
     roles: List[str]
     departments: List[str]
     approver_sequences: List[int]
+    filler_sequences: List[int]
     phone: Optional[str]
     is_active: int
     class Config:
@@ -53,6 +56,7 @@ async def list_users(
             roles=[u.roles.value] if hasattr(u.roles, 'value') else [str(u.roles)],
             departments=[ud.department.name for ud in u.user_departments],
             approver_sequences=[seq.sequence for seq in u.approver_sequences],
+            filler_sequences=[seq.sequence for seq in u.filler_sequences],
             phone=u.phone,
             is_active=u.is_active
         ))
@@ -96,6 +100,10 @@ async def create_user(
         uas = UserApproverSequence(user_id=user.id, sequence=seq_id)
         db.add(uas)
 
+    for seq_id in user_data.filler_sequence_ids:
+        ufs = UserFillerSequence(user_id=user.id, sequence=seq_id)
+        db.add(ufs)
+
     db.commit()
     db.refresh(user)
 
@@ -105,6 +113,7 @@ async def create_user(
         roles=[user.roles.value] if hasattr(user.roles, 'value') else [str(user.roles)],
         departments=[ud.department.name for ud in user.user_departments],
         approver_sequences=[seq.sequence for seq in user.approver_sequences],
+        filler_sequences=[seq.sequence for seq in user.filler_sequences],
         phone=user.phone,
         is_active=user.is_active
     )
@@ -157,6 +166,12 @@ async def update_user(
             uas = UserApproverSequence(user_id=user.id, sequence=seq_id)
             db.add(uas)
 
+    if user_data.filler_sequence_ids is not None:
+        db.query(UserFillerSequence).filter(UserFillerSequence.user_id == user_id).delete()
+        for seq_id in user_data.filler_sequence_ids:
+            ufs = UserFillerSequence(user_id=user.id, sequence=seq_id)
+            db.add(ufs)
+
     db.commit()
     db.refresh(user)
 
@@ -166,6 +181,7 @@ async def update_user(
         roles=[user.roles.value] if hasattr(user.roles, 'value') else [str(user.roles)],
         departments=[ud.department.name for ud in user.user_departments],
         approver_sequences=[seq.sequence for seq in user.approver_sequences],
+        filler_sequences=[seq.sequence for seq in user.filler_sequences],
         phone=user.phone,
         is_active=user.is_active
     )

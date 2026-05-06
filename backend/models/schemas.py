@@ -36,12 +36,14 @@ class UserCreate(UserBase):
     roles: List[RoleEnum] = []
     department_ids: List[int] = []
     approver_sequence_ids: List[int] = []  # 审批者可审批的序号列表
+    filler_sequence_ids: List[int] = []  # 填报者可填报的序号列表
 
 class UserResponse(UserBase):
     id: int
     roles: List[str] = []
     departments: List[str] = []
     approver_sequences: List[int] = []  # 审批者可审批的序号列表
+    filler_sequences: List[int] = []  # 填报者可填报的序号列表
     class Config:
         from_attributes = True
 

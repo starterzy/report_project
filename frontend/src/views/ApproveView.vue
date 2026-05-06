@@ -13,17 +13,17 @@
           style="width: 120px"
         />
       </el-form-item>
-      <el-form-item label="状态" :ellipsis="false">
-        <el-select v-model="statusFilter" @change="fetchRecords">
+      
+      <el-form-item label="状态">
+        <el-select v-model="statusFilter" @change="fetchRecords" style="width: 120px" placeholder="请选择">
           <el-option label="全部" value="" />
           <el-option label="已提交" value="submitted" />
           <el-option label="已审核" value="approved" />
-          <el-option label="已退回" value="rejected" />
         </el-select>
       </el-form-item>
     </el-form>
 
-    <el-table :data="records" stripe border height="calc(100vh - 180px)" class="compact-table">
+    <el-table :data="records" stripe border height="95%" class="compact-table">
       <el-table-column prop="task_sequence" label="序号" width="60" align="center" />
       <el-table-column prop="task_name" label="工作任务" min-width="200" show-overflow-tooltip />
       <el-table-column prop="submitter_name" label="填报人" width="100" align="center" />

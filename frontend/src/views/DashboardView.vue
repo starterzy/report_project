@@ -1,41 +1,41 @@
 <template>
-  <div>
-    <h2>欢迎使用报表系统</h2>
-    <el-row :gutter="20" style="margin-top: 20px">
+  <div class="dashboard-container">
+    <h2 class="dashboard-title">欢迎使用重点工作任务填报系统</h2>
+    <el-row :gutter="12">
       <el-col :span="6">
-        <el-card>
+        <el-card shadow="never" class="stat-card">
           <template #header>主要任务总数</template>
-          <div style="font-size: 30px; text-align: center">{{ stats.totalTasks }}</div>
+          <div class="stat-number">{{ stats.totalTasks }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card>
+        <el-card shadow="never" class="stat-card">
           <template #header>本月已填报</template>
-          <div style="font-size: 30px; text-align: center">{{ stats.filledThisMonth }}</div>
+          <div class="stat-number">{{ stats.filledThisMonth }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card>
+        <el-card shadow="never" class="stat-card">
           <template #header>待审批</template>
-          <div style="font-size: 30px; text-align: center">{{ stats.pendingApproval }}</div>
+          <div class="stat-number">{{ stats.pendingApproval }}</div>
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card>
+        <el-card shadow="never" class="stat-card">
           <template #header>已完成</template>
-          <div style="font-size: 30px; text-align: center">{{ stats.approved }}</div>
+          <div class="stat-number">{{ stats.approved }}</div>
         </el-card>
       </el-col>
     </el-row>
 
-    <el-card style="margin-top: 20px">
-      <template #header>当前月份填报状态</template>
-      <el-table :data="monthlyStats" stripe>
+    <el-card style="margin-top: 16px" shadow="never">
+      <template #header>填报状态统计</template>
+      <el-table :data="monthlyStats" stripe class="relaxed-table">
         <el-table-column prop="month" label="月份" width="120" />
-        <el-table-column prop="total" label="总措施数" width="140" />
-        <el-table-column prop="draft" label="草稿" width="120" />
-        <el-table-column prop="submitted" label="已提交" width="120" />
-        <el-table-column prop="approved" label="已审核" width="120" />
+        <el-table-column prop="total" label="总任务数" width="120" />
+        <el-table-column prop="draft" label="草稿" width="100" />
+        <el-table-column prop="submitted" label="已提交" width="100" />
+        <el-table-column prop="approved" label="已审核" width="100" />
         <el-table-column label="进度">
           <template #default="{ row }">
             <el-progress :percentage="row.total ? Math.round(row.approved / row.total * 100) : 0" />
@@ -88,3 +88,41 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.dashboard-container {
+  height: 100%;
+  overflow: auto;
+}
+.dashboard-title {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.stat-card {
+  text-align: center;
+}
+.stat-card :deep(.el-card__header) {
+  padding: 12px 16px;
+  font-size: 14px;
+}
+.stat-card :deep(.el-card__body) {
+  padding: 20px 16px;
+}
+.stat-number {
+  font-size: 32px;
+  font-weight: 600;
+  color: #409eff;
+}
+.relaxed-table {
+  font-size: 14px;
+}
+.relaxed-table :deep(.el-table__header th) {
+  padding: 12px 0;
+  font-size: 14px;
+}
+.relaxed-table :deep(.el-table__body td) {
+  padding: 14px 0;
+  font-size: 14px;
+}
+</style>

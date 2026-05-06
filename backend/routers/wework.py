@@ -65,6 +65,7 @@ async def wework_callback(code: str = None, state: str = None, db: Session = Dep
         access_token = create_access_token(data={"sub": user.username})
         departments = [ud.department.name for ud in user.user_departments]
         approver_sequences = [seq.sequence for seq in user.approver_sequences]
+        filler_sequences = [seq.sequence for seq in user.filler_sequences]
 
         login_data = {
             "access_token": access_token,
@@ -74,16 +75,17 @@ async def wework_callback(code: str = None, state: str = None, db: Session = Dep
                 "username": user.username,
                 "roles": [user.roles.value] if user.roles else [],
                 "departments": departments,
-                "approver_sequences": approver_sequences
+                "approver_sequences": approver_sequences,
+                "filler_sequences": filler_sequences
             }
         }
 
         print(f"[INFO] SSO登录成功: userid={wework_userid}, username={user.username}, phone={user.phone}")
-        return success_html(json.dumps(login_data))
+        return success_html(access_token, login_data["user"])
     except Exception as e:
         return error_html(str(e))
 
-def success_html(data: str) -> HTMLResponse:
+def success_html(access_token: str, user_data: dict) -> HTMLResponse:
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -93,7 +95,8 @@ def success_html(data: str) -> HTMLResponse:
     </head>
     <body>
         <script>
-            localStorage.setItem('token', '{data}');
+            localStorage.setItem('token', '{access_token}');
+            localStorage.setItem('user', JSON.stringify({json.dumps(user_data)}));
             window.location.href = 'https://report.zjamp.com/';
         </script>
     </body>

@@ -126,6 +126,9 @@ async def create_record(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
+    # 填报者权限检查
+    _check_filler_permission(current_user, task, db)
+
     # 检查是否已存在当月记录（按 task_id + month 检查）
     existing = db.query(ReportRecord).filter(
         ReportRecord.task_id == record.task_id,
@@ -174,6 +177,9 @@ async def update_record(
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
 
+    # 填报者权限检查
+    _check_filler_permission(current_user, record.task, db)
+
     user_role = current_user.roles.value if hasattr(current_user.roles, 'value') else str(current_user.roles)
 
     # 草稿可以修改，已审批的记录只有管理员可以修改
@@ -221,6 +227,9 @@ async def submit_record(
     if record.submitter_id != current_user.id:
         raise HTTPException(status_code=403, detail="Can only submit your own records")
 
+    # 填报者权限检查
+    _check_filler_permission(current_user, record.task, db)
+
     record.status = StatusEnum.SUBMITTED
     record.submitted_at = datetime.utcnow()
     db.commit()
@@ -255,6 +264,27 @@ def _check_approver_permission(user: User, record: ReportRecord, db: Session) ->
     user_sequences = [seq.sequence for seq in user.approver_sequences]
     if task_sequence not in user_sequences:
         raise HTTPException(status_code=403, detail="No permission to approve this record")
+
+def _check_filler_permission(user: User, task: Task, db: Session) -> None:
+    """填报者权限检查：检查该记录对应的任务序号是否在填报者的可填报序号列表中"""
+    user_role = user.roles.value if hasattr(user.roles, 'value') else str(user.roles)
+    if user_role not in ('filler', 'approver', 'admin'):
+        return
+
+    # admin 和 approver 不受限制
+    if user_role in ('approver', 'admin'):
+        return
+
+    # filler 检查序号限制
+    task_sequence = task.sequence
+    filler_sequences = [seq.sequence for seq in user.filler_sequences]
+
+    # 如果没有设置限制，则可以填报所有
+    if len(filler_sequences) == 0:
+        return
+
+    if task_sequence not in filler_sequences:
+        raise HTTPException(status_code=403, detail="您没有权限填报此任务")
 
 @router.post("/records/{record_id}/approve", response_model=ReportRecordResponse)
 async def approve_record(
