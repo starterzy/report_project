@@ -38,14 +38,14 @@
       :span-method="spanMethod"
       stripe
       border
-      height="95%"
       class="compact-table"
+      style="flex: 1"
     >
       <!-- 列0-6: 按 measure 分行，task 内合并 -->
       <el-table-column prop="sequence" label="序号" width="40" align="center" fixed />
       <el-table-column prop="taskName" label="重点工作" width="90" fixed />
-      <el-table-column prop="target" label="主要目标任务" min-width="150" fixed />
-      <el-table-column label="牵头领导" min-width="35">
+      <el-table-column prop="target" label="主要目标任务" min-width="120" fixed />
+      <el-table-column label="牵头领导" min-width="40">
         <template #default="{ row }">
           <div class="line-break compact-cell">{{ row.leader }}</div>
         </template>
@@ -63,16 +63,20 @@
       <el-table-column prop="deadline" label="完成时间" width="40" align="center" />
 
       <!-- 列7-9: 每 measure 一行 -->
-      <el-table-column prop="measureContent" label="年度工作措施" min-width="400" />
-      <el-table-column label="责任人" min-width="35">
+      <el-table-column prop="measureContent" label="年度工作措施" min-width="350" />
+      <el-table-column label="责任人" min-width="40">
         <template #default="{ row }">
           <div class="line-break compact-cell">{{ row.personLiable || '-' }}</div>
         </template>
       </el-table-column>
-      <el-table-column prop="specificMeasures" label="具体举措" min-width="150" />
+      <el-table-column label="具体举措" min-width="300">
+        <template #default="{ row }">
+          <div class="line-break compact-cell">{{ formatSemicolonNewline(row.specific_measure) }}</div>
+        </template>
+      </el-table-column>
 
       <!-- 列10-11: 本月/下月 - 按 task 合并显示 -->
-      <el-table-column label="本月工作内容" min-width="250">
+      <el-table-column label="上月工作内容" min-width="250">
         <template #default="{ row }">
           <template v-if="row._isFirstRow">
             <span v-if="authStore.isLeader" class="cell-text">{{ row.currentContent || '-' }}</span>
@@ -90,7 +94,7 @@
           </template>
         </template>
       </el-table-column>
-      <el-table-column label="下月工作计划" min-width="250">
+      <el-table-column label="本月工作计划" min-width="250">
         <template #default="{ row }">
           <template v-if="row._isFirstRow">
             <span v-if="authStore.isLeader" class="cell-text">{{ row.nextPlan || '-' }}</span>
@@ -109,7 +113,27 @@
         </template>
       </el-table-column>
 
-      <!-- 列12: 状态 - 按 task 合并 -->
+      <!-- 列12: 整体工作进展 - 按 task 合并 -->
+      <el-table-column label="整体工作进展" min-width="150">
+        <template #default="{ row }">
+          <template v-if="row._isFirstRow">
+            <span v-if="authStore.isLeader" class="cell-text">{{ row.taskProgress || '-' }}</span>
+            <span v-else-if="row.status && row.status !== 'draft'" class="cell-text">{{ row.taskProgress || '-' }}</span>
+            <span v-else-if="!canEditRow(row)" class="cell-text readonly-text">{{ row.taskProgress || '-' }}</span>
+            <el-input
+              v-else
+              v-model="row.taskProgress"
+              type="textarea"
+              :autosize="{ minRows: 2, maxRows: 10 }"
+              placeholder="请输入"
+              class="fill-input compact-input"
+              @change="handleContentChange(row)"
+            />
+          </template>
+        </template>
+      </el-table-column>
+
+      <!-- 列13: 状态 - 按 task 合并 -->
       <el-table-column label="状态" width="70" align="center">
         <template #default="{ row }">
           <template v-if="row._isFirstRow">
@@ -118,7 +142,7 @@
         </template>
       </el-table-column>
 
-      <!-- 列13: 操作 - 按 task 合并 -->
+      <!-- 列14: 操作 - 按 task 合并 -->
       <el-table-column v-if="!authStore.isLeader" label="操作" width="140" align="center">
         <template #default="{ row }">
           <template v-if="row._isFirstRow">
@@ -160,7 +184,12 @@ const searchDepartment = ref('')
 const loading = ref(false)
 const searchVersion = ref(0)
 const exportDialogVisible = ref(false)
-const selectedColumns = ref(['sequence', 'taskName', 'target', 'leader', 'departmentName', 'partnerDepts', 'deadline', 'measureContent', 'personLiable', 'specificMeasures', 'currentContent', 'nextPlan'])
+const selectedColumns = ref(['sequence', 'taskName', 'target', 'leader', 'departmentName', 'partnerDepts', 'deadline', 'measureContent', 'personLiable', 'specific_measure', 'currentContent', 'nextPlan'])
+
+function formatSemicolonNewline(text) {
+  if (!text) return ''
+  return text.replace(/；/g, '\n').replace(/;/g, '\n')
+}
 
 function getRowKey(row) {
   return `${row.measureId}`
@@ -183,7 +212,8 @@ const allData = computed(() => {
         measureId: measure.id,
         measureContent: measure.content,
         personLiable: measure.person_liable || '',
-        specificMeasures: '',
+        specific_measure: measure.specific_measure || '',
+        taskProgress: taskRecord?.task_progress || '',  // task 级别的整体工作进展
         // 填报内容从 task 级别记录获取
         recordId: taskRecord?.id,
         currentContent: taskRecord?.current_content || '',
@@ -243,7 +273,7 @@ const spanMap = computed(() => {
 // columnIndex:
 // 0-6: 按 task 合并（task 内所有 measure 行合并）
 // 7-9: 每 measure 一行（不合并）
-// 10-13: 按 task 合并（第一个 measure 行显示，其余隐藏）
+// 10-14: 按 task 合并（第一个 measure 行显示，其余隐藏）
 function spanMethod({ row, column, rowIndex, columnIndex }) {
   const taskInfo = spanMap.value[row.taskId]
   if (!taskInfo) return { rowspan: 1, colspan: 1 }
@@ -257,12 +287,12 @@ function spanMethod({ row, column, rowIndex, columnIndex }) {
     }
   }
 
-  // 列 7-9 (measureContent, personLiable, specificMeasures): 每 measure 一行，不合并
+  // 列 7-9 (measureContent, personLiable, specific_measure): 每 measure 一行，不合并
   if (columnIndex >= 7 && columnIndex <= 9) {
     return { rowspan: 1, colspan: 1 }
   }
 
-  // 列 10-13 (currentContent, nextPlan, status, actions): 按 task 合并
+  // 列 10-14 (currentContent, nextPlan, taskProgress, status, actions): 按 task 合并
   if (columnIndex >= 10) {
     if (row._isFirstRow) {
       return { rowspan: taskInfo.count, colspan: 1 }
@@ -341,22 +371,26 @@ function handleContentChange(row) {
   sameTaskRows.forEach(r => {
     r.currentContent = row.currentContent
     r.nextPlan = row.nextPlan
+    r.taskProgress = row.taskProgress
   })
 }
+
 
 async function saveRow(row) {
   try {
     if (row.recordId) {
       await reportApi.updateRecord(row.recordId, {
         current_content: row.currentContent,
-        next_plan: row.nextPlan
+        next_plan: row.nextPlan,
+        task_progress: row.taskProgress
       })
     } else {
       const res = await reportApi.createRecord({
         task_id: row.taskId,
         month: selectedMonth.value,
         current_content: row.currentContent,
-        next_plan: row.nextPlan
+        next_plan: row.nextPlan,
+        task_progress: row.taskProgress
       })
       row.recordId = res.id
       // 同步更新其他行
@@ -367,7 +401,30 @@ async function saveRow(row) {
       })
     }
     ElMessage.success('保存成功')
-    fetchRecords()
+
+    // 保存其他已编辑的行的当前内容（fetchRecords 会覆盖 allData，需要保留未保存的编辑）
+    const pendingEdits = {}
+    allData.value.forEach(r => {
+      if (r._modified && r.taskId !== row.taskId) {
+        pendingEdits[r.taskId] = {
+          currentContent: r.currentContent,
+          nextPlan: r.nextPlan,
+          taskProgress: r.taskProgress
+        }
+      }
+    })
+
+    await fetchRecords()
+
+    // 恢复 fetch 后丢失的编辑内容
+    allData.value.forEach(r => {
+      if (pendingEdits[r.taskId]) {
+        r.currentContent = pendingEdits[r.taskId].currentContent
+        r.nextPlan = pendingEdits[r.taskId].nextPlan
+        r.taskProgress = pendingEdits[r.taskId].taskProgress
+        r._modified = true
+      }
+    })
   } catch (e) {
     ElMessage.error('保存失败：' + (e.response?.data?.detail || e.message))
   }
@@ -375,13 +432,45 @@ async function saveRow(row) {
 
 async function submitRow(row) {
   try {
-    // 先保存
+    // 保存其他已编辑的行（不同 taskId 的行）
+    const otherModifiedRows = allData.value.filter(r => r._modified && r.taskId !== row.taskId)
+    const savePromises = otherModifiedRows.map(r => {
+      if (r._modified) {
+        if (r.recordId) {
+          return reportApi.updateRecord(r.recordId, {
+            current_content: r.currentContent,
+            next_plan: r.nextPlan,
+            task_progress: r.taskProgress
+          })
+        } else {
+          return reportApi.createRecord({
+            task_id: r.taskId,
+            month: selectedMonth.value,
+            current_content: r.currentContent,
+            next_plan: r.nextPlan,
+            task_progress: r.taskProgress
+          }).then(res => {
+            
+            r.recordId = res.id
+            r._modified = false
+
+
+            return res
+          })
+        }
+      }
+    })
+    await Promise.all(savePromises)
+    otherModifiedRows.forEach(r => r._modified = false)
+
+    // 保存当前行
     if (!row.recordId) {
       const res = await reportApi.createRecord({
         task_id: row.taskId,
         month: selectedMonth.value,
         current_content: row.currentContent,
-        next_plan: row.nextPlan
+        next_plan: row.nextPlan,
+        task_progress: row.taskProgress
       })
       row.recordId = res.id
       allData.value.forEach(r => {
@@ -392,14 +481,15 @@ async function submitRow(row) {
     } else {
       await reportApi.updateRecord(row.recordId, {
         current_content: row.currentContent,
-        next_plan: row.nextPlan
+        next_plan: row.nextPlan,
+        task_progress: row.taskProgress
       })
     }
 
     // 提交
     await reportApi.submitRecord(row.recordId)
     ElMessage.success('提交成功')
-    fetchRecords()
+    await fetchRecords()
   } catch (e) {
     ElMessage.error('提交失败：' + (e.response?.data?.detail || e.message))
   }
@@ -435,10 +525,11 @@ onMounted(fetchData)
 
 <style scoped>
 .tasks-container {
-  height: 95vh;
-  overflow: hidden;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .compact-title {
   margin: 0 0 2px 0;
@@ -446,7 +537,8 @@ onMounted(fetchData)
   font-weight: 500;
 }
 .search-form {
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 .search-form .el-form-item {
   margin-bottom: 0;
@@ -466,7 +558,7 @@ onMounted(fetchData)
 }
 .cell-text {
   word-break: break-word;
-  white-space: normal;
+  white-space: pre-wrap;
   font-family: "宋体", "SimSun", serif;
   font-size: 12px;
   line-height: 1.3;
@@ -519,6 +611,10 @@ onMounted(fetchData)
   border: 1px solid #dcdfe6;
   font-family: "宋体", "SimSun", serif;
   font-size: 12px;
+  overflow: hidden;
+}
+.el-table__body-wrapper {
+  overflow-y: auto;
 }
 .el-table th {
   background-color: #f5f7fa !important;

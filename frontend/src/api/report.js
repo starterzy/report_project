@@ -29,6 +29,10 @@ export const reportApi = {
     return api.post(`/api/report/records/${id}/reject`)
   },
 
+  updateMeasureProgress(measureId, data) {
+    return api.post(`/api/report/measures/${measureId}/progress`, data)
+  },
+
   getDepartments() {
     return api.get('/api/departments')
   },

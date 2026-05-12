@@ -25,7 +25,7 @@
 
     <el-table :data="records" stripe border height="95%" class="compact-table">
       <el-table-column prop="task_sequence" label="序号" width="60" align="center" />
-      <el-table-column prop="task_name" label="工作任务" min-width="200" show-overflow-tooltip />
+      <el-table-column prop="target" label="主要目标任务" min-width="200" show-overflow-tooltip />
       <el-table-column prop="submitter_name" label="填报人" width="100" align="center" />
       <el-table-column label="状态" width="80" align="center">
         <template #default="{ row }">
@@ -34,7 +34,7 @@
       </el-table-column>
       <el-table-column label="本月工作内容" min-width="200">
         <template #default="{ row }">
-          <span v-if="row.status === 'approved'" class="cell-text">{{ row.current_content || '-' }}</span>
+          <span v-if="(row.status === 'approved' && !authStore.isAdmin) || (row.status === 'submitted' && !authStore.isAdmin)" class="cell-text">{{ row.current_content || '-' }}</span>
           <el-input
             v-else
             v-model="row.current_content"
@@ -42,19 +42,36 @@
             :rows="2"
             placeholder="请输入"
             class="compact-input"
+            :autosize="{ minRows: 2, maxRows: 20 }"
             @change="row._modified = true"
           />
         </template>
       </el-table-column>
       <el-table-column label="下月工作计划" min-width="200">
         <template #default="{ row }">
-          <span v-if="row.status === 'approved'" class="cell-text">{{ row.next_plan || '-' }}</span>
+          <span v-if="(row.status === 'approved' && !authStore.isAdmin) || (row.status === 'submitted' && !authStore.isAdmin)" class="cell-text">{{ row.next_plan || '-' }}</span>
           <el-input
             v-else
             v-model="row.next_plan"
             type="textarea"
             :rows="2"
             placeholder="请输入"
+            class="compact-input"
+            :autosize="{ minRows: 2, maxRows: 20 }"
+            @change="row._modified = true"
+          />
+        </template>
+      </el-table-column>
+      <el-table-column label="整体工作进展" min-width="150">
+        <template #default="{ row }">
+          <span v-if="(row.status === 'approved' && !authStore.isAdmin) || (row.status === 'submitted' && !authStore.isAdmin)" class="cell-text">{{ row.task_progress || '-' }}</span>
+          <el-input
+            v-else
+            v-model="row.task_progress"
+            type="textarea"
+            :rows="2"
+            placeholder="请输入"
+            :autosize="{ minRows: 2, maxRows: 20 }"
             class="compact-input"
             @change="row._modified = true"
           />
@@ -65,14 +82,19 @@
           {{ row.submitted_at ? new Date(row.submitted_at).toLocaleString() : '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right" align="center">
+      <el-table-column label="操作" width="180" fixed="right" align="center">
         <template #default="{ row }">
           <template v-if="row.status === 'submitted'">
             <el-button type="success" size="small" @click="approveRecord(row)">通过</el-button>
             <el-button type="danger" size="small" @click="rejectRecord(row)">退回</el-button>
           </template>
           <template v-else-if="row.status === 'approved'">
-            <span style="color: #67c23a">已审核</span>
+            <template v-if="authStore.isAdmin">
+              <el-button type="primary" size="small" @click="saveApprovedRecord(row)">保存</el-button>
+            </template>
+            <template v-else>
+              <span style="color: #67c23a">已审核</span>
+            </template>
             <br />
             <span style="font-size: 11px; color: #999">审核人: {{ row.reviewer_name }}</span>
           </template>
@@ -133,7 +155,8 @@ async function approveRecord(row) {
     if (row._modified) {
       await reportApi.updateRecord(row.id, {
         current_content: row.current_content,
-        next_plan: row.next_plan
+        next_plan: row.next_plan,
+        task_progress: row.task_progress
       })
       row._modified = false
     }
@@ -142,6 +165,20 @@ async function approveRecord(row) {
     fetchRecords()
   } catch (e) {
     ElMessage.error('审核失败：' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function saveApprovedRecord(row) {
+  try {
+    await reportApi.updateRecord(row.id, {
+      current_content: row.current_content,
+      next_plan: row.next_plan,
+      task_progress: row.task_progress
+    })
+    ElMessage.success('保存成功')
+    fetchRecords()
+  } catch (e) {
+    ElMessage.error('保存失败：' + (e.response?.data?.detail || e.message))
   }
 }
 

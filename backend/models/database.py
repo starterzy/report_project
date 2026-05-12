@@ -108,6 +108,7 @@ class Measure(Base):
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
     content = Column(Text, nullable=False)        # 年度工作措施
     person_liable = Column(String(100))             # 责任人
+    specific_measure = Column(Text)                # 具体举措
     task = relationship("Task", back_populates="measures")
 
 # ReportRecord 现在与 task_id 关联（一个 task 一个月只有一条记录）
@@ -119,6 +120,7 @@ class ReportRecord(Base):
     month = Column(String(7), nullable=False)        # 填报月份 YYYY-MM
     current_content = Column(Text)                 # 本月工作内容
     next_plan = Column(Text)                       # 下月工作计划
+    task_progress = Column(Text)                   # 整体工作进展
     status = Column(SQLEnum(StatusEnum, values_callable=lambda x: [e.value for e in x]), default=StatusEnum.DRAFT)
     submitted_at = Column(DateTime, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)

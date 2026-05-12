@@ -63,6 +63,7 @@ class MeasureResponse(BaseModel):
     content: str
     task_id: int
     person_liable: Optional[str] = None
+    specific_measure: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -85,6 +86,7 @@ class ReportRecordBase(BaseModel):
     month: str  # YYYY-MM格式
     current_content: Optional[str] = None
     next_plan: Optional[str] = None
+    task_progress: Optional[str] = None  # 整体工作进展
 
 class ReportRecordCreate(ReportRecordBase):
     pass
@@ -92,6 +94,7 @@ class ReportRecordCreate(ReportRecordBase):
 class ReportRecordUpdate(BaseModel):
     current_content: Optional[str] = None
     next_plan: Optional[str] = None
+    task_progress: Optional[str] = None  # 整体工作进展
 
 class RejectRequest(BaseModel):
     reason: str  # 退回原因
@@ -107,6 +110,7 @@ class ReportRecordResponse(ReportRecordBase):
     reviewer_name: Optional[str] = None
     reject_reason: Optional[str] = None
     task_name: str
+    target: str
     task_sequence: int
     class Config:
         from_attributes = True

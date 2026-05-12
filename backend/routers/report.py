@@ -46,7 +46,8 @@ def task_to_response(task: Task) -> TaskResponse:
                 id=m.id,
                 content=m.content,
                 task_id=m.task_id,
-                person_liable=m.person_liable
+                person_liable=m.person_liable,
+                specific_measure=m.specific_measure
             ) for m in task.measures
         ]
     )
@@ -104,6 +105,7 @@ async def get_records(
             month=r.month,
             current_content=r.current_content,
             next_plan=r.next_plan,
+            task_progress=r.task_progress,
             status=r.status.value,
             submitted_at=r.submitted_at,
             reviewed_at=r.reviewed_at,
@@ -111,6 +113,7 @@ async def get_records(
             reviewer_name=r.reviewer.username if r.reviewer else None,
             reject_reason=r.reject_reason,
             task_name=r.task.name,
+            target=r.task.target,
             task_sequence=r.task.sequence
         ))
     return result
@@ -143,6 +146,7 @@ async def create_record(
         month=record.month,
         current_content=record.current_content,
         next_plan=record.next_plan,
+        task_progress=record.task_progress,
         status=StatusEnum.DRAFT
     )
     db.add(new_record)
@@ -194,6 +198,8 @@ async def update_record(
         record.current_content = update_data.current_content
     if update_data.next_plan is not None:
         record.next_plan = update_data.next_plan
+    if update_data.task_progress is not None:
+        record.task_progress = update_data.task_progress
 
     db.commit()
     db.refresh(record)
@@ -205,6 +211,7 @@ async def update_record(
         month=record.month,
         current_content=record.current_content,
         next_plan=record.next_plan,
+        task_progress=record.task_progress,
         status=record.status.value,
         submitted_at=record.submitted_at,
         reviewed_at=record.reviewed_at,
@@ -212,6 +219,7 @@ async def update_record(
         reviewer_name=record.reviewer.username if record.reviewer else None,
         reject_reason=record.reject_reason,
         task_name=record.task.name,
+        target=record.task.target,
         task_sequence=record.task.sequence
     )
 
@@ -231,7 +239,7 @@ async def submit_record(
     _check_filler_permission(current_user, record.task, db)
 
     record.status = StatusEnum.SUBMITTED
-    record.submitted_at = datetime.utcnow()
+    record.submitted_at = datetime.now()
     db.commit()
     db.refresh(record)
     return ReportRecordResponse(
@@ -249,6 +257,7 @@ async def submit_record(
         reviewer_name=None,
         reject_reason=None,
         task_name=record.task.name,
+        target=record.task.target,
         task_sequence=record.task.sequence
     )
 
@@ -311,7 +320,7 @@ async def approve_record(
     _check_approver_permission(current_user, record, db)
 
     record.status = StatusEnum.APPROVED
-    record.reviewed_at = datetime.utcnow()
+    record.reviewed_at = datetime.now()
     record.reviewer_id = current_user.id
     db.commit()
     db.refresh(record)
@@ -330,6 +339,7 @@ async def approve_record(
         reviewer_name=current_user.username,
         reject_reason=record.reject_reason,
         task_name=record.task.name,
+        target=record.task.target,
         task_sequence=record.task.sequence
     )
 
@@ -372,6 +382,7 @@ async def reject_record(
         reviewer_name=current_user.username,
         reject_reason=record.reject_reason,
         task_name=record.task.name,
+        target=record.task.target,
         task_sequence=record.task.sequence
     )
 
