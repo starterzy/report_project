@@ -20,7 +20,8 @@ def import_excel_to_db(db: Session, excel_path: str) -> dict:
     df.columns = [
         "序号", "重点工作", "主要目标任务", "牵头领导",
         "牵头部门", "配合部门", "完成时间", "年度工作措施",
-        "责任人", "具体举措", "本月工作内容", "下月工作计划"
+        "责任人", "具体举措", "本月工作内容", "下月工作计划",
+        "整体工作进展"
     ]
     df = df.dropna(subset=["序号"])
     df["序号"] = df["序号"].astype(int)
@@ -38,6 +39,7 @@ def import_excel_to_db(db: Session, excel_path: str) -> dict:
         deadline = clean_text(row["完成时间"])
         measure_content = clean_text(row["年度工作措施"])
         person_liable = clean_text(row["责任人"])
+        specific_measure = clean_text(row["具体举措"])
 
         if pd.isna(seq) or pd.isna(task_name):
             continue
@@ -97,7 +99,8 @@ def import_excel_to_db(db: Session, excel_path: str) -> dict:
             measure = Measure(
                 task_id=current_task.id,
                 content=measure_content,
-                person_liable=person_liable or ""
+                person_liable=person_liable or "",
+                specific_measure=specific_measure or ""
             )
             db.add(measure)
             stats["measures"] += 1
@@ -155,7 +158,7 @@ def export_excel_from_db(db: Session, template_path: str, month: str, selected_c
 
     # 默认选中所有列
     if selected_columns is None:
-        selected_columns = ['currentContent', 'nextPlan']
+        selected_columns = ["currentContent", "nextPlan", "taskProgress"]
 
     # 获取当月的所有已审批记录（只有APPROVED状态才导出）
     records = db.query(ReportRecord).filter(
@@ -197,6 +200,11 @@ def export_excel_from_db(db: Session, template_path: str, month: str, selected_c
     # K列是第11列(索引10)，L列是第12列(索引11)
     K_COL = 11  # 1-based in openpyxl
     L_COL = 12
+    M_COL = 13
+    G_COL = 7
+    H_COL = 8
+    I_COL = 9
+    J_COL = 10
 
     # 数据从第4行开始
     DATA_START_ROW = 4
@@ -204,11 +212,16 @@ def export_excel_from_db(db: Session, template_path: str, month: str, selected_c
     # 列映射
     COL_MAP = {
         'currentContent': K_COL,
-        'nextPlan': L_COL
+        'nextPlan': L_COL,
+        'taskProgress': M_COL
     }
 
     # 遍历模板行，填充数据
     for row in range(DATA_START_ROW, 161):
+        # 设置G、H、I、J列字体为仿宋_GB2312
+        for col in [G_COL, H_COL, I_COL, J_COL]:
+            cell = ws.cell(row=row, column=col)
+            cell.font = Font(size=12, name="仿宋_GB2312")
         cell_a = ws.cell(row=row, column=1)
         if not cell_a.value:
             continue
@@ -225,8 +238,10 @@ def export_excel_from_db(db: Session, template_path: str, month: str, selected_c
                         cell.value = matched_record.current_content or ''
                     elif col_key == 'nextPlan':
                         cell.value = matched_record.next_plan or ''
+                    elif col_key == "taskProgress":
+                        cell.value = matched_record.task_progress or ''
                     # 设置字体大小12和自动换行
-                    cell.font = Font(size=12, name='宋体')
+                    cell.font = Font(size=12, name='仿宋_GB2312')
                     cell.alignment = Alignment(wrap_text=True, vertical='top')
 
     # 隐藏未选中的列

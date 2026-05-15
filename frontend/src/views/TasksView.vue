@@ -20,9 +20,6 @@
       <el-form-item label="目标">
         <el-input v-model="searchTarget" placeholder="搜索目标" clearable @input="handleSearch" style="width: 150px" />
       </el-form-item>
-      <el-form-item label="责任人">
-        <el-input v-model="searchPersonLiable" placeholder="责任人" clearable @input="handleSearch" style="width: 110px" />
-      </el-form-item>
       <el-form-item label="部门">
         <el-input v-model="searchDepartment" placeholder="部门" clearable @input="handleSearch" style="width: 120px" />
       </el-form-item>
@@ -241,10 +238,6 @@ const displayData = computed(() => {
     const keyword = searchTarget.value.toLowerCase()
     data = data.filter(row => row.target.toLowerCase().includes(keyword))
   }
-  if (searchPersonLiable.value) {
-    const keyword = searchPersonLiable.value.toLowerCase()
-    data = data.filter(row => row.personLiable && row.personLiable.toLowerCase().includes(keyword))
-  }
   if (searchDepartment.value) {
     const keyword = searchDepartment.value.toLowerCase()
     data = data.filter(row => row.departmentName && row.departmentName.toLowerCase().includes(keyword))
@@ -347,6 +340,12 @@ async function fetchRecords() {
     // records 按 task_id 存储
     const newRecords = {}
     res.forEach(r => {
+      // 草稿记录：只有填报者本人和管理员能看
+      if (r.status === 'draft') {
+        if (r.submitter_id !== authStore.user?.id && !authStore.isAdmin) {
+          return // 跳过这条记录
+        }
+      }
       newRecords[r.task_id] = r
     })
     records.value = newRecords
@@ -400,7 +399,6 @@ async function saveRow(row) {
         }
       })
     }
-    ElMessage.success('保存成功')
 
     // 保存其他已编辑的行的当前内容（fetchRecords 会覆盖 allData，需要保留未保存的编辑）
     const pendingEdits = {}
@@ -425,6 +423,7 @@ async function saveRow(row) {
         r._modified = true
       }
     })
+    ElMessage.success('保存成功')
   } catch (e) {
     ElMessage.error('保存失败：' + (e.response?.data?.detail || e.message))
   }

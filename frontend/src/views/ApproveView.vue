@@ -34,7 +34,7 @@
       </el-table-column>
       <el-table-column label="本月工作内容" min-width="200">
         <template #default="{ row }">
-          <span v-if="(row.status === 'approved' && !authStore.isAdmin) || (row.status === 'submitted' && !authStore.isAdmin)" class="cell-text">{{ row.current_content || '-' }}</span>
+          <span v-if="row.status === 'approved' && !authStore.isAdmin" class="cell-text">{{ row.current_content || '-' }}</span>
           <el-input
             v-else
             v-model="row.current_content"
@@ -49,7 +49,7 @@
       </el-table-column>
       <el-table-column label="下月工作计划" min-width="200">
         <template #default="{ row }">
-          <span v-if="(row.status === 'approved' && !authStore.isAdmin) || (row.status === 'submitted' && !authStore.isAdmin)" class="cell-text">{{ row.next_plan || '-' }}</span>
+          <span v-if="row.status === 'approved' && !authStore.isAdmin" class="cell-text">{{ row.next_plan || '-' }}</span>
           <el-input
             v-else
             v-model="row.next_plan"
@@ -62,24 +62,29 @@
           />
         </template>
       </el-table-column>
-      <el-table-column label="整体工作进展" min-width="150">
+      <el-table-column label="整体工作进展" min-width="200">
         <template #default="{ row }">
-          <span v-if="(row.status === 'approved' && !authStore.isAdmin) || (row.status === 'submitted' && !authStore.isAdmin)" class="cell-text">{{ row.task_progress || '-' }}</span>
+          <span v-if="row.status === 'approved' && !authStore.isAdmin" class="cell-text">{{ row.task_progress || '-' }}</span>
           <el-input
             v-else
             v-model="row.task_progress"
             type="textarea"
             :rows="2"
             placeholder="请输入"
-            :autosize="{ minRows: 2, maxRows: 20 }"
             class="compact-input"
+            :autosize="{ minRows: 2, maxRows: 20 }"
             @change="row._modified = true"
           />
         </template>
       </el-table-column>
-      <el-table-column prop="submitted_at" label="提交时间" width="160">
+      <el-table-column prop="submitted_at" label="提交时间" width="120">
         <template #default="{ row }">
           {{ row.submitted_at ? new Date(row.submitted_at).toLocaleString() : '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="reviewed_at" label="审核时间" width="120">
+        <template #default="{ row }">
+          {{ row.reviewed_at ? new Date(row.reviewed_at).toLocaleString() : '-' }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="180" fixed="right" align="center">

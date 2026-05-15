@@ -137,8 +137,33 @@ async def create_record(
         ReportRecord.task_id == record.task_id,
         ReportRecord.month == record.month
     ).first()
+
     if existing:
-        raise HTTPException(status_code=400, detail="Record already exists for this month")
+        # 更新现有记录（upsert）
+        existing.current_content = record.current_content
+        existing.next_plan = record.next_plan
+        existing.task_progress = record.task_progress
+        db.commit()
+        db.refresh(existing)
+        return ReportRecordResponse(
+            id=existing.id,
+            task_id=existing.task_id,
+            submitter_id=existing.submitter_id,
+            submitter_name=existing.submitter.username,
+            month=existing.month,
+            current_content=existing.current_content,
+            next_plan=existing.next_plan,
+            task_progress=existing.task_progress,
+            status=existing.status.value,
+            submitted_at=existing.submitted_at,
+            reviewed_at=existing.reviewed_at,
+            reviewer_id=existing.reviewer_id,
+            reviewer_name=existing.reviewer.username if existing.reviewer else None,
+            reject_reason=existing.reject_reason,
+            task_name=task.name,
+            target=task.target,
+            task_sequence=task.sequence
+        )
 
     new_record = ReportRecord(
         task_id=record.task_id,
@@ -167,6 +192,7 @@ async def create_record(
         reviewer_name=None,
         reject_reason=None,
         task_name=task.name,
+        target=task.target,
         task_sequence=task.sequence
     )
 
@@ -231,9 +257,9 @@ async def submit_record(
 ):
     record = db.query(ReportRecord).filter(ReportRecord.id == record_id).first()
     if not record:
-        raise HTTPException(status_code=404, detail="Record not found")
+        raise HTTPException(status_code=404, detail="请先保存后再提交")
     if record.submitter_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Can only submit your own records")
+        raise HTTPException(status_code=403, detail="仅能提交自己的记录")
 
     # 填报者权限检查
     _check_filler_permission(current_user, record.task, db)
@@ -395,7 +421,7 @@ async def export_records(
 ):
     """导出任务列表Excel"""
     # 获取模板路径
-    template_path = Path(__file__).parent.parent.parent / "2026年度集团总部重点工作任务分解表（填写责任人和举措）.xlsx"
+    template_path = Path(__file__).parent.parent.parent / "2026年度集团总部重点工作任务分解表（完整稿）.xlsx"
     if not template_path.exists():
         raise HTTPException(status_code=404, detail="模板文件不存在")
 

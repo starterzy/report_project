@@ -19,15 +19,13 @@
         <el-table :data="approvedRecords" stripe border>
           <el-table-column prop="task_sequence" label="序号" width="70" />
           <el-table-column prop="task_name" label="工作任务" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="measure_content" label="工作措施" min-width="400" show-overflow-tooltip />
+          <el-table-column prop="target" label="工作措施" min-width="280" show-overflow-tooltip />
           <el-table-column prop="submitter_name" label="填报人" width="120" />
           <el-table-column prop="month" label="月份" width="120" />
-          <el-table-column prop="current_progress" label="完成进度" width="100">
-            <template #default="{ row }">{{ row.current_progress || 0 }}%</template>
-          </el-table-column>
           <el-table-column prop="current_content" label="本月工作内容" min-width="280" show-overflow-tooltip />
           <el-table-column prop="next_plan" label="下月工作计划" min-width="280" show-overflow-tooltip />
-          <el-table-column prop="reviewed_at" label="审核时间" width="180">
+          <el-table-column prop="task_progress" label="整体工作进展" min-width="280" show-overflow-tooltip />
+          <el-table-column prop="reviewed_at" label="审核时间" width="100">
             <template #default="{ row }">
               {{ row.reviewed_at ? new Date(row.reviewed_at).toLocaleString() : '-' }}
             </template>

@@ -11,7 +11,7 @@ from backend.models import get_db, User, RoleEnum
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "fallback-key-CHANGE-THIS-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 365 * 24 * 60  # 1年
 
 # Rate limiting: {ip: (count, reset_time)}
 login_attempts = {}
