@@ -18,6 +18,7 @@
         <el-select v-model="statusFilter" @change="fetchRecords" style="width: 120px" placeholder="请选择">
           <el-option label="全部" value="" />
           <el-option label="已提交" value="submitted" />
+          <el-option label="待二级审批" value="first_approved" />
           <el-option label="已审核" value="approved" />
         </el-select>
       </el-form-item>
@@ -87,11 +88,18 @@
           {{ row.reviewed_at ? new Date(row.reviewed_at).toLocaleString() : '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right" align="center">
+      <el-table-column label="操作" width="200" fixed="right" align="center">
         <template #default="{ row }">
           <template v-if="row.status === 'submitted'">
+            <el-button v-if="row.task_second_approver_id" type="success" size="small" @click="approveRecord(row)">提交二级</el-button>
+            <el-button v-else type="success" size="small" @click="approveRecord(row)">通过</el-button>
+            <el-button type="danger" size="small" @click="rejectRecord(row)">退回</el-button>
+          </template>
+          <template v-else-if="row.status === 'first_approved'">
             <el-button type="success" size="small" @click="approveRecord(row)">通过</el-button>
             <el-button type="danger" size="small" @click="rejectRecord(row)">退回</el-button>
+            <br />
+            <span style="font-size: 11px; color: #999">一级已审: {{ row.first_reviewer_name }}</span>
           </template>
           <template v-else-if="row.status === 'approved'">
             <template v-if="authStore.isAdmin">
@@ -101,7 +109,15 @@
               <span style="color: #67c23a">已审核</span>
             </template>
             <br />
-            <span style="font-size: 11px; color: #999">审核人: {{ row.reviewer_name }}</span>
+            <span style="font-size: 11px; color: #999">
+              <template v-if="row.task_second_approver_id">
+                <template v-if="row.first_reviewer_name">一级: {{ row.first_reviewer_name }};</template>
+                <template v-if="row.reviewer_name">二级: {{ row.reviewer_name }}</template>
+              </template>
+              <template v-else>
+                审批人: {{ row.reviewer_name }}
+              </template>
+            </span>
           </template>
           <template v-else-if="row.status === 'rejected'">
             <span style="color: #f56c6c">已退回</span>
@@ -127,12 +143,12 @@ const statusFilter = ref('')
 const records = ref([])
 
 function statusType(status) {
-  const map = { draft: 'info', submitted: 'warning', approved: 'success', rejected: 'danger' }
+  const map = { draft: 'info', submitted: 'warning', first_approved: 'warning', approved: 'success', rejected: 'danger' }
   return map[status] || 'info'
 }
 
 function statusText(status) {
-  const map = { draft: '草稿', submitted: '已提交', approved: '已审核', rejected: '已退回' }
+  const map = { draft: '草稿', submitted: '已提交', first_approved: '待二级审批', approved: '已审核', rejected: '已退回' }
   return map[status] || status
 }
 
@@ -144,9 +160,29 @@ async function fetchRecords() {
     }
     let allRecords = await reportApi.getRecords(params)
     // 审批者只能看到自己有权限审批的记录
+    console.log(authStore.user)
     if (authStore.isApprover && !authStore.isAdmin) {
       const sequences = authStore.user?.approver_sequences || []
-      allRecords = allRecords.filter(r => sequences.includes(r.task_sequence))
+      const userId = authStore.user?.id
+      console.log(sequences)
+      console.log(userId)
+      allRecords = allRecords.filter(r => {
+        console.log(r)
+        // submitted状态：需要是一级审批者（序号在权限列表中）才能审批
+        if (r.status === 'submitted' && sequences.includes(r.task_sequence)) {
+          return true
+        }
+        // first_approved状态：需要是二级审批人才能审批
+        if (r.status === 'first_approved' && r.task_second_approver_id === userId) {
+          return true
+        }
+        // approved状态：需要是审批过这条记录的人（一级或二级）才能看到
+        if (r.status === 'approved') {
+          if (sequences.includes(r.task_sequence)) return true  // 一级审批者
+          if (r.task_second_approver_id === userId) return true  // 二级审批人
+        }
+        return false
+      })
     }
     records.value = allRecords
   } catch (e) {

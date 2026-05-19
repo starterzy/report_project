@@ -25,6 +25,7 @@ class UserUpdate(BaseModel):
     filler_sequence_ids: Optional[List[int]] = None
     phone: Optional[str] = None
     is_active: Optional[int] = None
+    second_approver_task_ids: Optional[List[int]] = None  # 设置该用户为这些任务的二级审批人
 
 class UserResponse(BaseModel):
     id: int
@@ -35,6 +36,7 @@ class UserResponse(BaseModel):
     filler_sequences: List[int]
     phone: Optional[str]
     is_active: int
+    second_approver_task_ids: List[int] = []  # 该用户作为二级审批人的任务ID列表
     class Config:
         from_attributes = True
 
@@ -50,6 +52,9 @@ async def list_users(
     users = db.query(User).all()
     result = []
     for u in users:
+        # 获取该用户作为二级审批人的任务ID列表
+        from backend.models.database import Task
+        second_approver_task_ids = [t.id for t in db.query(Task).filter(Task.second_approver_id == u.id).all()]
         result.append(UserResponse(
             id=u.id,
             username=u.username,
@@ -58,7 +63,8 @@ async def list_users(
             approver_sequences=[seq.sequence for seq in u.approver_sequences],
             filler_sequences=[seq.sequence for seq in u.filler_sequences],
             phone=u.phone,
-            is_active=u.is_active
+            is_active=u.is_active,
+            second_approver_task_ids=second_approver_task_ids
         ))
     return result
 
@@ -107,6 +113,9 @@ async def create_user(
     db.commit()
     db.refresh(user)
 
+    from backend.models.database import Task
+    second_approver_task_ids = [t.id for t in db.query(Task).filter(Task.second_approver_id == user.id).all()]
+
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -115,7 +124,8 @@ async def create_user(
         approver_sequences=[seq.sequence for seq in user.approver_sequences],
         filler_sequences=[seq.sequence for seq in user.filler_sequences],
         phone=user.phone,
-        is_active=user.is_active
+        is_active=user.is_active,
+        second_approver_task_ids=second_approver_task_ids
     )
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -172,8 +182,22 @@ async def update_user(
             ufs = UserFillerSequence(user_id=user.id, sequence=seq_id)
             db.add(ufs)
 
+    # 处理二级审批任务：将这些任务的 second_approver_id 设置为该用户
+    if user_data.second_approver_task_ids is not None:
+        from backend.models.database import Task
+        # 先清除该用户作为所有任务的二级审批人
+        db.query(Task).filter(Task.second_approver_id == user_id).update({Task.second_approver_id: None})
+        # 再将指定任务的 second_approver_id 设置为该用户
+        for task_id in user_data.second_approver_task_ids:
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if task:
+                task.second_approver_id = user_id
+
     db.commit()
     db.refresh(user)
+
+    from backend.models.database import Task
+    second_approver_task_ids = [t.id for t in db.query(Task).filter(Task.second_approver_id == user.id).all()]
 
     return UserResponse(
         id=user.id,
@@ -183,7 +207,8 @@ async def update_user(
         approver_sequences=[seq.sequence for seq in user.approver_sequences],
         filler_sequences=[seq.sequence for seq in user.filler_sequences],
         phone=user.phone,
-        is_active=user.is_active
+        is_active=user.is_active,
+        second_approver_task_ids=second_approver_task_ids
     )
 
 @router.delete("/{user_id}")

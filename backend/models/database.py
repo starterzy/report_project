@@ -17,6 +17,7 @@ class RoleEnum(enum.Enum):
 class StatusEnum(enum.Enum):
     DRAFT = "draft"        # 草稿
     SUBMITTED = "submitted"  # 已提交
+    FIRST_APPROVED = "first_approved"  # 一级已审
     APPROVED = "approved"    # 已审核
     REJECTED = "rejected"   # 已退回
 
@@ -96,11 +97,13 @@ class Task(Base):
     target = Column(Text, nullable=False)         # 主要目标任务
     deadline = Column(String(50))                  # 完成时间
     year = Column(Integer, default=2026)
+    second_approver_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 二级审批人
     measures = relationship("Measure", back_populates="task")
     leaders = relationship("TaskLeader", back_populates="task", cascade="all, delete-orphan")
     departments = relationship("TaskDepartment", back_populates="task", cascade="all, delete-orphan")
     partner_departments = relationship("TaskPartnerDepartment", back_populates="task", cascade="all, delete-orphan")
     report_records = relationship("ReportRecord", back_populates="task", cascade="all, delete-orphan")
+    second_approver = relationship("User", foreign_keys=[second_approver_id])
 
 class Measure(Base):
     __tablename__ = "measures"
@@ -126,6 +129,8 @@ class ReportRecord(Base):
     reviewed_at = Column(DateTime, nullable=True)
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     reject_reason = Column(Text, nullable=True)      # 退回原因
+    first_reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 一级审批人ID
+    first_reviewer_name = Column(String(100), nullable=True)  # 一级审批人姓名
     task = relationship("Task", back_populates="report_records")
     submitter = relationship("User", back_populates="submitted_records", foreign_keys=[submitter_id])
     reviewer = relationship("User", back_populates="reviewed_records", foreign_keys=[reviewer_id])

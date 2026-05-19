@@ -114,7 +114,9 @@ async def get_records(
             reject_reason=r.reject_reason,
             task_name=r.task.name,
             target=r.task.target,
-            task_sequence=r.task.sequence
+            task_sequence=r.task.sequence,
+            task_second_approver_id=r.task.second_approver_id if r.task else None,
+            first_reviewer_name=r.first_reviewer_name
         ))
     return result
 
@@ -162,7 +164,8 @@ async def create_record(
             reject_reason=existing.reject_reason,
             task_name=task.name,
             target=task.target,
-            task_sequence=task.sequence
+            task_sequence=task.sequence,
+            task_second_approver_id=task.second_approver_id if task else None
         )
 
     new_record = ReportRecord(
@@ -193,7 +196,8 @@ async def create_record(
         reject_reason=None,
         task_name=task.name,
         target=task.target,
-        task_sequence=task.sequence
+        task_sequence=task.sequence,
+        task_second_approver_id=task.second_approver_id if task else None
     )
 
 @router.put("/records/{record_id}", response_model=ReportRecordResponse)
@@ -246,7 +250,9 @@ async def update_record(
         reject_reason=record.reject_reason,
         task_name=record.task.name,
         target=record.task.target,
-        task_sequence=record.task.sequence
+        task_sequence=record.task.sequence,
+        task_second_approver_id=record.task.second_approver_id if record.task else None,
+        first_reviewer_name=record.first_reviewer_name
     )
 
 @router.post("/records/{record_id}/submit", response_model=ReportRecordResponse)
@@ -284,7 +290,10 @@ async def submit_record(
         reject_reason=None,
         task_name=record.task.name,
         target=record.task.target,
-        task_sequence=record.task.sequence
+        task_sequence=record.task.sequence,
+        task_second_approver_id=record.task.second_approver_id,
+        first_reviewer_name=record.first_reviewer_name,
+        task_progress=record.task_progress
     )
 
 def _check_approver_permission(user: User, record: ReportRecord, db: Session) -> None:
@@ -335,21 +344,47 @@ async def approve_record(
     if not record:
         db.rollback()
         raise HTTPException(status_code=404, detail="Record not found")
+
+    # 获取任务信息
+    task = db.query(Task).filter(Task.id == record.task_id).first()
+    second_approver_id = task.second_approver_id if task else None
+
     if record.status.value == StatusEnum.APPROVED.value:
         db.rollback()
         raise HTTPException(status_code=400, detail="该记录已审核，请勿重复操作")
-    if record.status.value != StatusEnum.SUBMITTED.value:
+
+    if record.status.value == StatusEnum.FIRST_APPROVED.value:
+        # 二级审批
+        if second_approver_id and current_user.id != second_approver_id and user_role != 'admin':
+            raise HTTPException(status_code=403, detail="您没有权限进行二级审批")
+        record.status = StatusEnum.APPROVED
+        record.reviewed_at = datetime.now()
+        record.reviewer_id = current_user.id
+        db.commit()
+        db.refresh(record)
+    elif record.status.value == StatusEnum.SUBMITTED.value:
+        # 一级审批
+        _check_approver_permission(current_user, record, db)
+
+        if second_approver_id:
+            # 需要二级审批
+            record.status = StatusEnum.FIRST_APPROVED
+            record.reviewed_at = datetime.now()
+            record.first_reviewer_id = current_user.id
+            record.first_reviewer_name = current_user.username
+            record.reviewer_id = None
+        else:
+            # 不需要二级审批，直接完成
+            record.status = StatusEnum.APPROVED
+            record.reviewed_at = datetime.now()
+            record.first_reviewer_id = current_user.id
+            record.first_reviewer_name = current_user.username
+            record.reviewer_id = current_user.id
+        db.commit()
+        db.refresh(record)
+    else:
         db.rollback()
-        raise HTTPException(status_code=400, detail="只能审核已提交的记录")
-
-    # 审批者权限检查：按序号检查
-    _check_approver_permission(current_user, record, db)
-
-    record.status = StatusEnum.APPROVED
-    record.reviewed_at = datetime.now()
-    record.reviewer_id = current_user.id
-    db.commit()
-    db.refresh(record)
+        raise HTTPException(status_code=400, detail="只能审核已提交或一级已审的记录")
     return ReportRecordResponse(
         id=record.id,
         task_id=record.task_id,
@@ -358,15 +393,18 @@ async def approve_record(
         month=record.month,
         current_content=record.current_content,
         next_plan=record.next_plan,
+        task_progress=record.task_progress,
         status=record.status.value,
         submitted_at=record.submitted_at,
         reviewed_at=record.reviewed_at,
         reviewer_id=record.reviewer_id,
-        reviewer_name=current_user.username,
+        reviewer_name=record.reviewer.username if record.reviewer else None,
         reject_reason=record.reject_reason,
         task_name=record.task.name,
         target=record.task.target,
-        task_sequence=record.task.sequence
+        task_sequence=record.task.sequence,
+        task_second_approver_id=task.second_approver_id if task else None,
+        first_reviewer_name=record.first_reviewer_name
     )
 
 @router.post("/records/{record_id}/reject", response_model=ReportRecordResponse)
@@ -382,15 +420,26 @@ async def reject_record(
     record = db.query(ReportRecord).filter(ReportRecord.id == record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
-    if record.status.value != StatusEnum.SUBMITTED.value:
-        raise HTTPException(status_code=400, detail="Can only reject submitted records")
 
-    # 审批者权限检查：按序号检查
-    _check_approver_permission(current_user, record, db)
+    task = db.query(Task).filter(Task.id == record.task_id).first()
+    second_approver_id = task.second_approver_id if task else None
 
-    # 退回后恢复为草稿状态
-    record.status = StatusEnum.DRAFT
-    record.submitted_at = None
+    # 根据状态判断退回逻辑
+    if record.status.value == StatusEnum.FIRST_APPROVED.value:
+        # 二级审批退回 → 退回到一级审批（状态变为 submitted）
+        if second_approver_id and current_user.id != second_approver_id and user_role != 'admin':
+            raise HTTPException(status_code=403, detail="您没有权限进行二级审批")
+        record.status = StatusEnum.SUBMITTED
+        record.reviewed_at = None
+        record.reviewer_id = None
+    elif record.status.value == StatusEnum.SUBMITTED.value:
+        # 一级审批退回 → 退回到填报者（状态变为 draft）
+        _check_approver_permission(current_user, record, db)
+        record.status = StatusEnum.DRAFT
+        record.submitted_at = None
+        record.reviewer_id = None
+    else:
+        raise HTTPException(status_code=400, detail="只能退回已提交或一级已审的记录")
     db.commit()
     db.refresh(record)
     return ReportRecordResponse(
@@ -409,7 +458,9 @@ async def reject_record(
         reject_reason=record.reject_reason,
         task_name=record.task.name,
         target=record.task.target,
-        task_sequence=record.task.sequence
+        task_sequence=record.task.sequence,
+        task_second_approver_id=record.task.second_approver_id if record.task else None,
+        first_reviewer_name=record.first_reviewer_name
     )
 
 @router.get("/export")

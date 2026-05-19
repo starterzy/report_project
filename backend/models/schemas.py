@@ -112,6 +112,9 @@ class ReportRecordResponse(ReportRecordBase):
     task_name: str
     target: str
     task_sequence: int
+    task_second_approver_id: Optional[int] = None
+    first_reviewer_name: Optional[str] = None
+    task_progress: Optional[str] = None
     class Config:
         from_attributes = True
 

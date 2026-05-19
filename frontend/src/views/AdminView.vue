@@ -64,6 +64,11 @@
               <span>{{ row.filler_sequences?.join(', ') || '-' }}</span>
             </template>
           </el-table-column>
+          <el-table-column prop="second_approver_task_ids" label="二级审批任务" min-width="150">
+            <template #default="{ row }">
+              <span>{{ row.second_approver_task_ids?.join(', ') || '-' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="is_active" label="状态" width="80">
             <template #default="{ row }">
               <el-tag :type="row.is_active ? 'success' : 'danger'" size="small">
@@ -83,7 +88,7 @@
     </el-tabs>
 
     <el-dialog v-model="userDialogVisible" :title="isEdit ? '编辑用户' : '新增用户'" width="600px">
-      <el-form :model="userForm" label-width="80px">
+      <el-form :model="userForm" label-width="100px">
         <el-form-item label="用户名" required>
           <el-input v-model="userForm.username" :disabled="isEdit" />
         </el-form-item>
@@ -116,6 +121,11 @@
             <el-option v-for="seq in sequences" :key="seq" :label="`序号 ${seq}`" :value="seq" />
           </el-select>
         </el-form-item>
+        <el-form-item label="二级审批任务">
+          <el-select v-model="userForm.second_approver_task_ids" multiple placeholder="选择该用户作为二级审批人的任务" style="width: 100%">
+            <el-option v-for="task in tasks" :key="task.id" :label="`序号 ${task.sequence}`" :value="task.id" />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="userDialogVisible = false">取消</el-button>
@@ -138,6 +148,7 @@ const approvedRecords = ref([])
 const users = ref([])
 const departments = ref([])
 const sequences = ref([])
+const tasks = ref([])
 const loading = ref(false)
 const userDialogVisible = ref(false)
 const isEdit = ref(false)
@@ -149,7 +160,8 @@ const userForm = ref({
   roles: [],
   department_ids: [],
   approver_sequence_ids: [],
-  filler_sequence_ids: []
+  filler_sequence_ids: [],
+  second_approver_task_ids: []
 })
 
 function roleText(role) {
@@ -189,8 +201,9 @@ async function fetchDepartments() {
 
 async function fetchSequences() {
   try {
-    const tasks = await reportApi.getTasks()
-    sequences.value = tasks.map(t => t.sequence).sort((a, b) => a - b)
+    const allTasks = await reportApi.getTasks()
+    sequences.value = allTasks.map(t => t.sequence).sort((a, b) => a - b)
+    tasks.value = allTasks
   } catch (e) {
     console.error(e)
   }
@@ -217,7 +230,8 @@ function openUserDialog(user = null) {
       roles: [...user.roles],
       department_ids: [],
       approver_sequence_ids: [...(user.approver_sequences || [])],
-      filler_sequence_ids: [...(user.filler_sequences || [])]
+      filler_sequence_ids: [...(user.filler_sequences || [])],
+      second_approver_task_ids: [...(user.second_approver_task_ids || [])]
     }
   } else {
     isEdit.value = false
@@ -229,7 +243,8 @@ function openUserDialog(user = null) {
       roles: ['filler'],
       department_ids: [],
       approver_sequence_ids: [],
-      filler_sequence_ids: []
+      filler_sequence_ids: [],
+      second_approver_task_ids: []
     }
   }
   userDialogVisible.value = true
@@ -250,6 +265,8 @@ async function saveUser() {
       // 总是发送序号数组，空数组表示清除所有限制
       data.approver_sequence_ids = userForm.value.approver_sequence_ids || []
       data.filler_sequence_ids = userForm.value.filler_sequence_ids || []
+      // 二级审批任务ID列表
+      data.second_approver_task_ids = userForm.value.second_approver_task_ids || []
       await userApi.updateUser(userForm.value.id, data)
       ElMessage.success('更新成功')
     } else {
