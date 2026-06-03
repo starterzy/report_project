@@ -12,7 +12,7 @@ from backend.models.schemas import (
 )
 from backend.services.auth_service import get_current_user
 from backend.services.excel_service import export_excel_from_db
-from backend.services.notification_service import notify_first_approvers
+from backend.services.notification_service import notify_first_approvers, notify_second_approver
 import io
 
 router = APIRouter(prefix="/api/report", tags=["报表"])
@@ -352,6 +352,7 @@ def _check_filler_permission(user: User, task: Task, db: Session) -> None:
 @router.post("/records/{record_id}/approve", response_model=ReportRecordResponse)
 async def approve_record(
     record_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -401,6 +402,24 @@ async def approve_record(
             record.reviewer_id = current_user.id
         db.commit()
         db.refresh(record)
+
+        # 一级审批通过且有二级审批人时，后台通知二级审批者
+        if second_approver_id:
+            _task_id = record.task_id
+            _task_name = record.task.name
+            _submitter_name = record.submitter.username
+            _first_reviewer_name = current_user.username
+            _month = record.month
+            _progress = record.task_progress
+            background_tasks.add_task(
+                notify_second_approver,
+                _task_id,
+                _task_name,
+                _submitter_name,
+                _first_reviewer_name,
+                _month,
+                _progress,
+            )
     else:
         db.rollback()
         raise HTTPException(status_code=400, detail="只能审核已提交或一级已审的记录")
