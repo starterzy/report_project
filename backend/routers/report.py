@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
@@ -12,6 +12,7 @@ from backend.models.schemas import (
 )
 from backend.services.auth_service import get_current_user
 from backend.services.excel_service import export_excel_from_db
+from backend.services.notification_service import notify_first_approvers
 import io
 
 router = APIRouter(prefix="/api/report", tags=["报表"])
@@ -197,7 +198,8 @@ async def create_record(
         task_name=task.name,
         target=task.target,
         task_sequence=task.sequence,
-        task_second_approver_id=task.second_approver_id if task else None
+        task_second_approver_id=task.second_approver_id if task else None,
+        task_progress=new_record.task_progress
     )
 
 @router.put("/records/{record_id}", response_model=ReportRecordResponse)
@@ -258,6 +260,7 @@ async def update_record(
 @router.post("/records/{record_id}/submit", response_model=ReportRecordResponse)
 async def submit_record(
     record_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -274,6 +277,22 @@ async def submit_record(
     record.submitted_at = datetime.now()
     db.commit()
     db.refresh(record)
+
+    # 后台通知一级审批者
+    _task_sequence = record.task.sequence
+    _task_name = record.task.name
+    _submitter_name = current_user.username
+    _month = record.month
+    _progress = record.task_progress
+    background_tasks.add_task(
+        notify_first_approvers,
+        _task_sequence,
+        _task_name,
+        _submitter_name,
+        _month,
+        _progress,
+    )
+
     return ReportRecordResponse(
         id=record.id,
         task_id=record.task_id,
