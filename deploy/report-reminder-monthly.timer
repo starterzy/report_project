@@ -1,0 +1,8 @@
+[Unit]
+Description=Report Fill Monthly Reminder Timer
+
+[Timer]
+OnCalendar=*-*-08 09:00:00
+
+[Install]
+WantedBy=timers.target
