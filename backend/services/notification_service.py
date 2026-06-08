@@ -132,14 +132,15 @@ async def send_wework_textcard(
 
 def get_first_approvers(db, task_sequence: int) -> list[User]:
     """
-    查询一级审批者：所有 role=approver 且 UserApproverSequence.sequence
+    查询一级审批者：所有 role=approver 或 role=admin 且 UserApproverSequence.sequence
     匹配 task_sequence 的活跃用户。
+    admin 也可审批，故一并纳入通知范围。
     """
     approvers = (
         db.query(User)
         .join(UserApproverSequence, UserApproverSequence.user_id == User.id)
         .filter(
-            User.roles == RoleEnum.APPROVER,
+            User.roles.in_([RoleEnum.APPROVER, RoleEnum.ADMIN]),
             User.is_active == 1,
             UserApproverSequence.sequence == task_sequence,
         )
