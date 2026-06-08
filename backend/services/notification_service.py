@@ -4,6 +4,7 @@
 """
 import httpx
 import logging
+from typing import Optional
 from backend.models.database import get_db, User, RoleEnum, UserApproverSequence, Task
 
 logger = logging.getLogger(__name__)
@@ -149,7 +150,7 @@ def get_first_approvers(db, task_sequence: int) -> list[User]:
     return approvers
 
 
-def get_second_approver(db, task: Task) -> User | None:
+def get_second_approver(db, task: Task) -> Optional[User]:
     """
     获取二级审批人：Task.second_approver_id 指定的活跃用户。
     """
@@ -191,7 +192,7 @@ async def notify_first_approvers(
     task_target: str,
     submitter_name: str,
     month: str,
-    task_progress: str | None,
+    task_progress: Optional[str],
 ):
     """
     后台任务：通知一级审批者有新的报表待审批。
@@ -229,7 +230,7 @@ async def notify_second_approver(
     submitter_name: str,
     first_reviewer_name: str,
     month: str,
-    task_progress: str | None,
+    task_progress: Optional[str],
 ):
     """
     后台任务：通知二级审批者报表已通过一级审批。
