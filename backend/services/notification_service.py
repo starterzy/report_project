@@ -188,7 +188,7 @@ def get_task_reminder_persons(db, task: Task) -> list[User]:
 
 async def notify_first_approvers(
     task_sequence: int,
-    task_name: str,
+    task_target: str,
     submitter_name: str,
     month: str,
     task_progress: str | None,
@@ -212,7 +212,7 @@ async def notify_first_approvers(
         title = "📋 新的重点工作任务进展待审批"
         desc = '<div class="gray">'
         desc += f"填报人：{submitter_name} "
-        desc += f"任务名称：{task_name} "
+        desc += f"主要目标任务：{task_target} "
         desc += f"填报月份：{month} "
         desc += f"工作进展：{_truncate(task_progress or '', 100)}"
         desc += "</div>"
@@ -225,7 +225,7 @@ async def notify_first_approvers(
 
 async def notify_second_approver(
     task_id: int,
-    task_name: str,
+    task_target: str,
     submitter_name: str,
     first_reviewer_name: str,
     month: str,
@@ -244,7 +244,7 @@ async def notify_second_approver(
 
         approver = get_second_approver(db, task)
         if not approver:
-            logger.info(f"任务 {task_name} 未设置二级审批人，跳过通知")
+            logger.info(f"任务 {task_target} 未设置二级审批人，跳过通知")
             return
         if not approver.phone:
             logger.warning(f"二级审批人 {approver.username} 没有企微 UserID，跳过通知")
@@ -254,7 +254,7 @@ async def notify_second_approver(
         desc = '<div class="gray">'
         desc += f"填报人：{submitter_name} "
         desc += f"一级审批人：{first_reviewer_name} "
-        desc += f"任务名称：{task_name} "
+        desc += f"主要目标任务：{task_target} "
         desc += f"填报月份：{month} "
         desc += f"工作进展：{_truncate(task_progress or '', 100)}"
         desc += "</div>"

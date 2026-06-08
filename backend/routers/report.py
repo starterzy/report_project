@@ -319,14 +319,14 @@ async def submit_record(
 
     # 后台通知一级审批者
     _task_sequence = record.task.sequence
-    _task_name = record.task.name
+    _task_target = record.task.target
     _submitter_name = current_user.username
     _month = record.month
     _progress = record.task_progress
     background_tasks.add_task(
         notify_first_approvers,
         _task_sequence,
-        _task_name,
+        _task_target,
         _submitter_name,
         _month,
         _progress,
@@ -445,7 +445,7 @@ async def approve_record(
         # 一级审批通过且有二级审批人时，后台通知二级审批者
         if second_approver_id:
             _task_id = record.task_id
-            _task_name = record.task.name
+            _task_target = record.task.target
             _submitter_name = record.submitter.username
             _first_reviewer_name = current_user.username
             _month = record.month
@@ -453,7 +453,7 @@ async def approve_record(
             background_tasks.add_task(
                 notify_second_approver,
                 _task_id,
-                _task_name,
+                _task_target,
                 _submitter_name,
                 _first_reviewer_name,
                 _month,
