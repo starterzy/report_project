@@ -23,5 +23,13 @@ export const userApi = {
 
   getDepartments() {
     return api.get('/api/departments')
+  },
+
+  getTaskReminderPersons(taskId) {
+    return api.get(`/api/users/tasks/${taskId}/reminder-persons`)
+  },
+
+  setTaskReminderPersons(taskId, userIds) {
+    return api.put(`/api/users/tasks/${taskId}/reminder-persons`, { user_ids: userIds })
   }
 }

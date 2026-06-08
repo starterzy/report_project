@@ -85,6 +85,42 @@
           </el-table-column>
         </el-table>
       </el-tab-pane>
+
+      <el-tab-pane label="任务提醒设置" name="reminders">
+        <el-form inline class="search-form">
+          <el-form-item label="年份">
+            <el-select v-model="reminderYear" @change="fetchTaskReminders" style="width: 100px">
+              <el-option v-for="y in years" :key="y" :label="y" :value="y" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="saveAllReminders" :loading="savingReminders">全部保存</el-button>
+          </el-form-item>
+        </el-form>
+
+        <el-table :data="reminderTasks" stripe border v-loading="loadingReminders">
+          <el-table-column prop="sequence" label="序号" width="80" align="center" />
+          <el-table-column prop="name" label="任务名称" min-width="250" show-overflow-tooltip />
+          <el-table-column label="提醒人" min-width="400">
+            <template #default="{ row }">
+              <el-select
+                v-model="row.selectedReminderIds"
+                multiple
+                filterable
+                placeholder="选择提醒人"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="user in activeUsers"
+                  :key="user.id"
+                  :label="user.username"
+                  :value="user.id"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
     </el-tabs>
 
     <el-dialog v-model="userDialogVisible" :title="isEdit ? '编辑用户' : '新增用户'" width="600px">
@@ -163,6 +199,14 @@ const userForm = ref({
   filler_sequence_ids: [],
   second_approver_task_ids: []
 })
+
+// ========== 任务提醒设置 ==========
+const reminderYear = ref(new Date().getFullYear())
+const years = ref([2025, 2026, 2027])
+const reminderTasks = ref([])
+const activeUsers = ref([])
+const loadingReminders = ref(false)
+const savingReminders = ref(false)
 
 function roleText(role) {
   const map = { filler: '填报者', approver: '审批者', leader: '领导层', admin: '管理员' }
@@ -295,10 +339,54 @@ async function toggleUserStatus(user) {
   }
 }
 
+async function fetchTaskReminders() {
+  loadingReminders.value = true
+  try {
+    const allTasks = await reportApi.getTasks({ year: reminderYear.value })
+    const users = await userApi.getUsers()
+    activeUsers.value = users.filter(u => u.is_active)
+
+    // 并行加载每个任务的提醒人
+    const tasksWithReminders = await Promise.all(
+      allTasks.map(async (task) => {
+        try {
+          const resp = await userApi.getTaskReminderPersons(task.id)
+          return { ...task, selectedReminderIds: resp.user_ids || [] }
+        } catch {
+          return { ...task, selectedReminderIds: [] }
+        }
+      })
+    )
+    reminderTasks.value = tasksWithReminders
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('加载任务提醒设置失败')
+  } finally {
+    loadingReminders.value = false
+  }
+}
+
+async function saveAllReminders() {
+  savingReminders.value = true
+  try {
+    for (const task of reminderTasks.value) {
+      await userApi.setTaskReminderPersons(task.id, task.selectedReminderIds || [])
+    }
+    ElMessage.success('任务提醒设置已保存')
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('保存失败')
+  } finally {
+    savingReminders.value = false
+  }
+}
+
 function handleTabChange(tab) {
   if (tab === 'users') {
     fetchUsers()
     fetchDepartments()
+  } else if (tab === 'reminders') {
+    fetchTaskReminders()
   }
 }
 
