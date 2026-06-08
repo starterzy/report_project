@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Enum as SQLEnum, event
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Enum as SQLEnum, event, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 import enum
@@ -98,6 +98,7 @@ class TaskPartnerDepartment(Base):
 
 class TaskReminderPerson(Base):
     __tablename__ = "task_reminder_persons"
+    __table_args__ = (UniqueConstraint("task_id", "user_id", name="uq_task_reminder"),)
     id = Column(Integer, primary_key=True, index=True)
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)

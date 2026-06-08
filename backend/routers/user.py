@@ -296,10 +296,18 @@ async def set_task_reminder_persons(
 
     # 删除现有提醒人
     db.query(TaskReminderPerson).filter(TaskReminderPerson.task_id == task_id).delete()
+    # 去重并验证用户存在
+    unique_ids = list(set(data.user_ids))
+    if len(unique_ids) > 50:
+        raise HTTPException(status_code=422, detail="提醒人数量不能超过50个")
+    if unique_ids:
+        existing_count = db.query(User).filter(User.id.in_(unique_ids), User.is_active == 1).count()
+        if existing_count != len(unique_ids):
+            raise HTTPException(status_code=400, detail="包含无效或不存在的用户ID")
     # 添加新的提醒人
-    for uid in data.user_ids:
+    for uid in unique_ids:
         rp = TaskReminderPerson(task_id=task_id, user_id=uid)
         db.add(rp)
     db.commit()
 
-    return ReminderPersonsResponse(task_id=task_id, user_ids=data.user_ids)
+    return ReminderPersonsResponse(task_id=task_id, user_ids=unique_ids)
