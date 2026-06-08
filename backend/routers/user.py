@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from backend.models import get_db, User, Department, UserDepartment, UserApproverSequence, UserFillerSequence, RoleEnum
+from backend.models import get_db, User, Department, UserDepartment, UserApproverSequence, UserFillerSequence, RoleEnum, Task, TaskReminderPerson
 from backend.services.auth_service import get_current_user, get_password_hash
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
+
+class ReminderPersonsRequest(BaseModel):
+    user_ids: list[int] = []
+
+class ReminderPersonsResponse(BaseModel):
+    task_id: int
+    user_ids: list[int]
 
 class UserCreate(BaseModel):
     username: str
@@ -251,3 +258,48 @@ async def activate_user(
     db.commit()
 
     return {"message": "User activated"}
+
+@router.get("/tasks/{task_id}/reminder-persons", response_model=ReminderPersonsResponse)
+async def get_task_reminder_persons_endpoint(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取某任务的提醒人列表（Admin only）"""
+    user_role = current_user.roles.value if hasattr(current_user.roles, 'value') else str(current_user.roles)
+    if user_role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    user_ids = [rp.user_id for rp in task.reminder_persons]
+    return ReminderPersonsResponse(task_id=task_id, user_ids=user_ids)
+
+
+@router.put("/tasks/{task_id}/reminder-persons", response_model=ReminderPersonsResponse)
+async def set_task_reminder_persons(
+    task_id: int,
+    data: ReminderPersonsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """设置某任务的提醒人（全量替换，Admin only）"""
+    user_role = current_user.roles.value if hasattr(current_user.roles, 'value') else str(current_user.roles)
+    if user_role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # 删除现有提醒人
+    db.query(TaskReminderPerson).filter(TaskReminderPerson.task_id == task_id).delete()
+    # 添加新的提醒人
+    for uid in data.user_ids:
+        rp = TaskReminderPerson(task_id=task_id, user_id=uid)
+        db.add(rp)
+    db.commit()
+
+    return ReminderPersonsResponse(task_id=task_id, user_ids=data.user_ids)

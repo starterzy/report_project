@@ -12,6 +12,7 @@ class RoleEnum(str, Enum):
 class StatusEnum(str, Enum):
     DRAFT = "draft"
     SUBMITTED = "submitted"
+    FIRST_APPROVED = "first_approved"
     APPROVED = "approved"
     REJECTED = "rejected"
 
@@ -113,6 +114,7 @@ class ReportRecordResponse(ReportRecordBase):
     target: str
     task_sequence: int
     task_second_approver_id: Optional[int] = None
+    reminder_person_ids: Optional[list[int]] = None
     first_reviewer_name: Optional[str] = None
     task_progress: Optional[str] = None
     class Config:
