@@ -94,6 +94,11 @@ async def get_records(
             if approver_seqs:
                 tasks = db.query(Task.id).filter(Task.sequence.in_(approver_seqs)).all()
                 accessible_ids.update(t.id for t in tasks)
+            # 审批者如果配置了填报序号，也可查看对应任务（包括草稿）
+            filler_seqs = [s.sequence for s in current_user.filler_sequences]
+            if filler_seqs:
+                tasks = db.query(Task.id).filter(Task.sequence.in_(filler_seqs)).all()
+                accessible_ids.update(t.id for t in tasks)
 
         elif user_role == 'filler':
             # 填报者：可查看其填报序号匹配的任务记录（无限制则可查看所有）
@@ -373,11 +378,11 @@ def _check_filler_permission(user: User, task: Task, db: Session) -> None:
     if user_role not in ('filler', 'approver', 'admin'):
         return
 
-    # admin 和 approver 不受限制
-    if user_role in ('approver', 'admin'):
+    # admin 不受限制
+    if user_role == 'admin':
         return
 
-    # filler 检查序号限制
+    # filler 和 approver 检查 filler_sequences 限制
     task_sequence = task.sequence
     filler_sequences = [seq.sequence for seq in user.filler_sequences]
 

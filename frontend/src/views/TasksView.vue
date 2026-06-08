@@ -325,13 +325,14 @@ function canEditRow(row) {
   if (authStore.isAdmin) {
     return true
   }
-  // approver 只能编辑其审批序号匹配的行
+  // approver 可编辑其审批序号匹配的行，或填报序号匹配的行
   if (authStore.isApprover) {
-    const sequences = authStore.approverSequences
-    if (!sequences || sequences.length === 0) {
+    const approverSeqs = authStore.approverSequences || []
+    const fillerSeqs = authStore.fillerSequences || []
+    if (approverSeqs.length === 0 && fillerSeqs.length === 0) {
       return true
     }
-    return sequences.includes(row.sequence)
+    return approverSeqs.includes(row.sequence) || fillerSeqs.includes(row.sequence)
   }
   // filler 根据 filler_sequences 判断权限
   if (authStore.isFiller) {

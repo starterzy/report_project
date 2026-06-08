@@ -100,8 +100,9 @@
 
         <el-table :data="reminderTasks" stripe border v-loading="loadingReminders">
           <el-table-column prop="sequence" label="序号" width="80" align="center" />
-          <el-table-column prop="name" label="任务名称" min-width="250" show-overflow-tooltip />
-          <el-table-column label="提醒人" min-width="400">
+          <el-table-column prop="name" label="任务名称" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="target" label="主要目标任务" min-width="280" show-overflow-tooltip />
+          <el-table-column label="提醒人" min-width="300">
             <template #default="{ row }">
               <el-select
                 v-model="row.selectedReminderIds"
@@ -152,7 +153,7 @@
             <el-option v-for="seq in sequences" :key="seq" :label="`序号 ${seq}`" :value="seq" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="userForm.roles.includes('filler')" label="可填报序号">
+        <el-form-item v-if="userForm.roles.includes('filler') || userForm.roles.includes('approver')" label="可填报序号">
           <el-select v-model="userForm.filler_sequence_ids" multiple placeholder="选择可填报的序号（不选则可填报全部）" style="width: 100%">
             <el-option v-for="seq in sequences" :key="seq" :label="`序号 ${seq}`" :value="seq" />
           </el-select>
@@ -257,7 +258,7 @@ function onRolesChange() {
   if (!userForm.value.roles.includes('approver')) {
     userForm.value.approver_sequence_ids = []
   }
-  if (!userForm.value.roles.includes('filler')) {
+  if (!userForm.value.roles.includes('filler') && !userForm.value.roles.includes('approver')) {
     userForm.value.filler_sequence_ids = []
   }
 }
