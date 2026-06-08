@@ -209,13 +209,12 @@ async def notify_first_approvers(
             logger.warning(f"序号 {task_sequence} 的一级审批者没有企微 UserID，跳过通知")
             return
 
-        title = "📋 新的报表待审批"
+        title = "📋 新的重点工作任务进展待审批"
         desc = '<div class="gray">'
         desc += f"填报人：{submitter_name}<br/>"
         desc += f"任务名称：{task_name}<br/>"
-        desc += f"填报月份：{month}"
-        if task_progress:
-            desc += f"<br/>工作进展：{_truncate(task_progress, 100)}"
+        desc += f"填报月份：{month}<br/>"
+        desc += f"工作进展：{_truncate(task_progress or '', 100)}"
         desc += "</div>"
 
         url = f"{SYSTEM_URL}/#/approve?month={month}"
@@ -251,14 +250,13 @@ async def notify_second_approver(
             logger.warning(f"二级审批人 {approver.username} 没有企微 UserID，跳过通知")
             return
 
-        title = "📋 报表已通过一级审批，待您二审"
+        title = "📋 新的重点工作任务进展待审批"
         desc = '<div class="gray">'
         desc += f"填报人：{submitter_name}<br/>"
         desc += f"一级审批人：{first_reviewer_name}<br/>"
         desc += f"任务名称：{task_name}<br/>"
-        desc += f"填报月份：{month}"
-        if task_progress:
-            desc += f"<br/>工作进展：{_truncate(task_progress, 100)}"
+        desc += f"填报月份：{month}<br/>"
+        desc += f"工作进展：{_truncate(task_progress or '', 100)}"
         desc += "</div>"
 
         url = f"{SYSTEM_URL}/#/approve?month={month}"
