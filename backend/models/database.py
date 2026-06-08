@@ -1,10 +1,17 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Enum as SQLEnum
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Enum as SQLEnum, event
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 import enum
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./report.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -89,6 +96,14 @@ class TaskPartnerDepartment(Base):
     task = relationship("Task", back_populates="partner_departments")
     department = relationship("Department", back_populates="task_partner_departments")
 
+class TaskReminderPerson(Base):
+    __tablename__ = "task_reminder_persons"
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    task = relationship("Task", back_populates="reminder_persons")
+    user = relationship("User")
+
 class Task(Base):
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True, index=True)
@@ -104,6 +119,7 @@ class Task(Base):
     partner_departments = relationship("TaskPartnerDepartment", back_populates="task", cascade="all, delete-orphan")
     report_records = relationship("ReportRecord", back_populates="task", cascade="all, delete-orphan")
     second_approver = relationship("User", foreign_keys=[second_approver_id])
+    reminder_persons = relationship("TaskReminderPerson", back_populates="task", cascade="all, delete-orphan")
 
 class Measure(Base):
     __tablename__ = "measures"
