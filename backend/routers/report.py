@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from typing import Optional
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
-from backend.models import get_db, User, Task, Measure, ReportRecord, Department, RoleEnum, StatusEnum, TaskLeader, TaskDepartment, TaskPartnerDepartment, UserApproverSequence
+from backend.models import get_db, User, Task, Measure, ReportRecord, Department, RoleEnum, StatusEnum, TaskLeader, TaskDepartment, TaskPartnerDepartment, UserApproverSequence, UserFillerSequence
 from backend.models.schemas import (
     TaskResponse, MeasureResponse, ReportRecordCreate, ReportRecordUpdate,
     ReportRecordResponse, RejectRequest
@@ -76,18 +77,56 @@ async def get_records(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """获取填报记录列表，现在按 task 返回（一个 task 一个月只有一条记录）"""
+    """获取填报记录列表，按用户权限过滤"""
     query = db.query(ReportRecord).options(
         joinedload(ReportRecord.task)
     )
 
     user_role = current_user.roles.value if hasattr(current_user.roles, 'value') else str(current_user.roles)
 
-    # 权限控制：领导层只能看已审核的记录，其他人（管理、审批者、填报者）都能看到所有记录
-    if user_role == 'leader':
-        # 领导层只能看已审核的记录
-        query = query.filter(ReportRecord.status == StatusEnum.APPROVED)
-    # filler、approver、admin 都能看到所有记录，不需要额外过滤
+    # 权限控制：基于用户的角色和任务权限过滤可查看的记录
+    if user_role != 'admin':
+        accessible_ids = set()
+
+        if user_role == 'approver':
+            # 审批者：可查看其审批序号匹配的任务记录
+            approver_seqs = [s.sequence for s in current_user.approver_sequences]
+            if approver_seqs:
+                tasks = db.query(Task.id).filter(Task.sequence.in_(approver_seqs)).all()
+                accessible_ids.update(t.id for t in tasks)
+
+        elif user_role == 'filler':
+            # 填报者：可查看其填报序号匹配的任务记录（无限制则可查看所有）
+            filler_seqs = [s.sequence for s in current_user.filler_sequences]
+            if filler_seqs:
+                tasks = db.query(Task.id).filter(Task.sequence.in_(filler_seqs)).all()
+                accessible_ids.update(t.id for t in tasks)
+            else:
+                # 无填报限制，可查看所有任务
+                all_tasks = db.query(Task.id).all()
+                accessible_ids.update(t.id for t in all_tasks)
+
+        # 所有角色：如果被设为某任务的二级审批人，也可查看该任务记录
+        second_approver_tasks = db.query(Task.id).filter(Task.second_approver_id == current_user.id).all()
+        second_ids = [t.id for t in second_approver_tasks]
+        accessible_ids.update(second_ids)
+
+        if not accessible_ids:
+            return []
+
+        query = query.filter(ReportRecord.task_id.in_(accessible_ids))
+
+        # Leader 只能看已审核记录（但其作为二级审批人的任务可看全部状态）
+        if user_role == 'leader':
+            if second_ids:
+                query = query.filter(
+                    or_(
+                        ReportRecord.status == StatusEnum.APPROVED,
+                        ReportRecord.task_id.in_(second_ids)
+                    )
+                )
+            else:
+                query = query.filter(ReportRecord.status == StatusEnum.APPROVED)
 
     if status_filter:
         query = query.filter(ReportRecord.status == StatusEnum[status_filter.upper()])
