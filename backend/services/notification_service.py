@@ -272,7 +272,7 @@ async def notify_task_reminders(year: int):
     遍历当前年度所有活跃任务的提醒人，去重后发送一条全员提醒。
     自行管理 DB 会话。
     """
-    from backend.models.database import Task as TaskModel, TaskReminderPerson
+    from backend.models.database import Task as TaskModel
 
     db = next(get_db())
     try:
