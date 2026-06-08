@@ -26,6 +26,48 @@ def _truncate(text: str, max_len: int = 100) -> str:
     return text[:max_len] + "…"
 
 
+async def send_text_message(userids: list[str], content: str) -> bool:
+    """
+    发送企业微信文本消息。
+    userids: 企微 UserID 列表（使用 phone 字段存储的值）
+    content: 消息正文
+    返回 True 表示发送成功。
+    """
+    if not userids:
+        logger.warning("未提供接收者，跳过文本消息发送")
+        return False
+
+    try:
+        access_token = await _get_wework_access_token()
+    except Exception as e:
+        logger.error(f"获取 access_token 异常: {e}")
+        return False
+
+    send_url = f"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={access_token}"
+    body = {
+        "touser": "|".join(userids),
+        "msgtype": "text",
+        "agentid": int(WEWORK_AGENT_ID),
+        "text": {
+            "content": content,
+        },
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(send_url, json=body)
+            data = response.json()
+            if data.get("errcode") == 0:
+                logger.info(f"企微文本消息发送成功: touser={len(userids)}人")
+                return True
+            else:
+                logger.error(f"企微文本消息发送失败: {data}")
+                return False
+    except Exception as e:
+        logger.error(f"企微文本消息发送异常: {e}")
+        return False
+
+
 async def _get_wework_access_token() -> str:
     """获取企业微信 access_token"""
     url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken"
@@ -122,6 +164,27 @@ def get_second_approver(db, task: Task) -> User | None:
     )
 
 
+def get_task_reminder_persons(db, task: Task) -> list[User]:
+    """
+    获取某任务的所有提醒人（活跃用户且有企微 UserID）。
+    """
+    if not task or not task.reminder_persons:
+        return []
+    user_ids = [rp.user_id for rp in task.reminder_persons]
+    if not user_ids:
+        return []
+    return (
+        db.query(User)
+        .filter(
+            User.id.in_(user_ids),
+            User.is_active == 1,
+            User.phone.isnot(None),
+            User.phone != "",
+        )
+        .all()
+    )
+
+
 async def notify_first_approvers(
     task_sequence: int,
     task_name: str,
@@ -199,5 +262,101 @@ async def notify_second_approver(
 
         url = f"{SYSTEM_URL}/#/approve?month={month}"
         await send_wework_textcard([approver.phone], title, desc, url)
+    finally:
+        db.close()
+
+
+async def notify_task_reminders(year: int):
+    """
+    全员提醒模式（每月8号）：
+    遍历当前年度所有活跃任务的提醒人，去重后发送一条全员提醒。
+    自行管理 DB 会话。
+    """
+    from backend.models.database import Task as TaskModel, TaskReminderPerson
+
+    db = next(get_db())
+    try:
+        tasks = (
+            db.query(TaskModel)
+            .filter(TaskModel.year == year)
+            .all()
+        )
+
+        # 收集所有提醒人的 phone（企微 UserID），去重
+        all_userids = set()
+        for task in tasks:
+            persons = get_task_reminder_persons(db, task)
+            for p in persons:
+                all_userids.add(p.phone)
+
+        if not all_userids:
+            logger.info(f"年度 {year} 没有配置提醒人，跳过全员提醒")
+            return
+
+        content = "【重点工作任务填报提醒】\n请在重点工作任务填报中更新最新进度。如已填请忽略本条消息。谢谢！"
+        await send_text_message(list(all_userids), content)
+    finally:
+        db.close()
+
+
+async def check_and_notify_unfilled(year: int, month: str):
+    """
+    未填报检查模式（每月10号）：
+    遍历当前年度所有活跃任务，检查当月是否有填报记录。
+    没有记录则通知该任务的提醒人。
+    同一提醒人涉及多个未填任务时合并为一条消息。
+    自行管理 DB 会话。
+    """
+    from backend.models.database import Task as TaskModel, ReportRecord as RR
+
+    db = next(get_db())
+    try:
+        tasks = (
+            db.query(TaskModel)
+            .filter(TaskModel.year == year)
+            .all()
+        )
+
+        # 收集 提醒人phone → 未填任务列表
+        reminder_map: dict[str, list[str]] = {}  # phone -> [task_label, ...]
+
+        for task in tasks:
+            # 检查当月是否有填报记录
+            record = (
+                db.query(RR)
+                .filter(
+                    RR.task_id == task.id,
+                    RR.month == month,
+                )
+                .first()
+            )
+            if record is not None:
+                continue  # 已填报，跳过
+
+            # 未填报，获取提醒人
+            persons = get_task_reminder_persons(db, task)
+            if not persons:
+                continue
+
+            task_label = f"序号{task.sequence}-{task.name}"
+            for p in persons:
+                if p.phone not in reminder_map:
+                    reminder_map[p.phone] = []
+                reminder_map[p.phone].append(task_label)
+
+        if not reminder_map:
+            logger.info(f"月份 {month} 所有任务已填报或无提醒人，跳过未填报提醒")
+            return
+
+        # 逐个提醒人发送合并消息
+        for phone, task_labels in reminder_map.items():
+            tasks_str = "、".join(task_labels)
+            content = (
+                "【重点工作任务填报提醒】\n"
+                "您还有未填报事项，请及时在重点工作任务填报中更新最新进度。谢谢！\n"
+                f"未填报任务：{tasks_str}"
+            )
+            await send_text_message([phone], content)
+
     finally:
         db.close()
