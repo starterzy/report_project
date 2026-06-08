@@ -23,6 +23,13 @@
       <el-form-item label="部门">
         <el-input v-model="searchDepartment" placeholder="部门" clearable @input="handleSearch" style="width: 120px" />
       </el-form-item>
+      <el-form-item label="填报状态">
+        <el-select v-model="statusFilter" @change="handleSearch" style="width: 110px">
+          <el-option label="全部" value="all" />
+          <el-option label="已填报" value="filled" />
+          <el-option label="未填报" value="unfilled" />
+        </el-select>
+      </el-form-item>
       <el-form-item>
         <el-button type="success" @click="handleExport">全表导出</el-button>
       </el-form-item>
@@ -172,12 +179,14 @@ import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 const tasks = ref([])
-const records = ref({})  // records[measureId] -> record (旧) / records[taskId] -> record (新)
+const records = ref({})  // records[taskId] -> record
+const localEdits = ref({})  // localEdits[taskId] -> { currentContent, nextPlan, taskProgress }
 const selectedMonth = ref(new Date().toISOString().slice(0, 7))
 const searchSequence = ref('')
 const searchTarget = ref('')
 const searchPersonLiable = ref('')
 const searchDepartment = ref('')
+const statusFilter = ref('all')
 const loading = ref(false)
 const searchVersion = ref(0)
 const exportDialogVisible = ref(false)
@@ -195,7 +204,8 @@ function getRowKey(row) {
 const allData = computed(() => {
   const result = []
   tasks.value.forEach(task => {
-    const taskRecord = records.value[task.id]  // 按 task_id 获取记录
+    const taskRecord = records.value[task.id]
+    const localEdit = localEdits.value[task.id]
     task.measures.forEach((measure, measureIndex) => {
       result.push({
         sequence: task.sequence,
@@ -210,15 +220,13 @@ const allData = computed(() => {
         measureContent: measure.content,
         personLiable: measure.person_liable || '',
         specific_measure: measure.specific_measure || '',
-        taskProgress: taskRecord?.task_progress || '',  // task 级别的整体工作进展
-        // 填报内容从 task 级别记录获取
+        taskProgress: localEdit?.taskProgress ?? taskRecord?.task_progress ?? '',
         recordId: taskRecord?.id,
-        currentContent: taskRecord?.current_content || '',
-        nextPlan: taskRecord?.next_plan || '',
+        currentContent: localEdit?.currentContent ?? taskRecord?.current_content ?? '',
+        nextPlan: localEdit?.nextPlan ?? taskRecord?.next_plan ?? '',
         status: taskRecord?.status || null,
-        // 标记是否为该 task 的第一行（用于合并单元格）
         _isFirstRow: measureIndex === 0,
-        _modified: false
+        _modified: !!localEdit
       })
     })
   })
@@ -241,6 +249,11 @@ const displayData = computed(() => {
   if (searchDepartment.value) {
     const keyword = searchDepartment.value.toLowerCase()
     data = data.filter(row => row.departmentName && row.departmentName.toLowerCase().includes(keyword))
+  }
+  if (statusFilter.value === 'unfilled') {
+    data = data.filter(row => !row.status || row.status === 'draft')
+  } else if (statusFilter.value === 'filled') {
+    data = data.filter(row => row.status && row.status !== 'draft')
   }
   return data
 })
@@ -340,12 +353,7 @@ async function fetchRecords() {
     // records 按 task_id 存储
     const newRecords = {}
     res.forEach(r => {
-      // 草稿记录：只有填报者本人和管理员能看
-      if (r.status === 'draft') {
-        if (r.submitter_id !== authStore.user?.id && !authStore.isAdmin) {
-          return // 跳过这条记录
-        }
-      }
+      // 后端已按用户权限过滤，前端直接展示
       newRecords[r.task_id] = r
     })
     records.value = newRecords
@@ -356,6 +364,7 @@ async function fetchRecords() {
 
 async function fetchData() {
   loading.value = true
+  localEdits.value = {}
   try {
     await Promise.all([fetchTasks(), fetchRecords()])
   } finally {
@@ -364,65 +373,38 @@ async function fetchData() {
 }
 
 function handleContentChange(row) {
-  row._modified = true
-  // 同步更新同 task 的其他行（如果有的话）
-  const sameTaskRows = allData.value.filter(r => r.taskId === row.taskId && r.measureId !== row.measureId)
-  sameTaskRows.forEach(r => {
-    r.currentContent = row.currentContent
-    r.nextPlan = row.nextPlan
-    r.taskProgress = row.taskProgress
-  })
+  localEdits.value[row.taskId] = {
+    currentContent: row.currentContent,
+    nextPlan: row.nextPlan,
+    taskProgress: row.taskProgress
+  }
 }
 
 
 async function saveRow(row) {
   try {
+    let res
     if (row.recordId) {
-      await reportApi.updateRecord(row.recordId, {
+      res = await reportApi.updateRecord(row.recordId, {
         current_content: row.currentContent,
         next_plan: row.nextPlan,
         task_progress: row.taskProgress
       })
     } else {
-      const res = await reportApi.createRecord({
+      res = await reportApi.createRecord({
         task_id: row.taskId,
         month: selectedMonth.value,
         current_content: row.currentContent,
         next_plan: row.nextPlan,
         task_progress: row.taskProgress
       })
-      row.recordId = res.id
-      // 同步更新其他行
-      allData.value.forEach(r => {
-        if (r.taskId === row.taskId) {
-          r.recordId = res.id
-        }
-      })
     }
 
-    // 保存其他已编辑的行的当前内容（fetchRecords 会覆盖 allData，需要保留未保存的编辑）
-    const pendingEdits = {}
-    allData.value.forEach(r => {
-      if (r._modified && r.taskId !== row.taskId) {
-        pendingEdits[r.taskId] = {
-          currentContent: r.currentContent,
-          nextPlan: r.nextPlan,
-          taskProgress: r.taskProgress
-        }
-      }
-    })
+    // Update local state with API response
+    records.value[row.taskId] = res
+    // Clear local edit for this task
+    delete localEdits.value[row.taskId]
 
-    await fetchRecords()
-
-    // 恢复 fetch 后丢失的编辑内容
-    allData.value.forEach(r => {
-      if (pendingEdits[r.taskId]) {
-        r.currentContent = pendingEdits[r.taskId].currentContent
-        r.nextPlan = pendingEdits[r.taskId].nextPlan
-        r.taskProgress = pendingEdits[r.taskId].taskProgress
-        r._modified = true
-      }
-    })
     ElMessage.success('保存成功')
   } catch (e) {
     ElMessage.error('保存失败：' + (e.response?.data?.detail || e.message))
@@ -431,39 +413,40 @@ async function saveRow(row) {
 
 async function submitRow(row) {
   try {
-    // 保存其他已编辑的行（不同 taskId 的行）
-    const otherModifiedRows = allData.value.filter(r => r._modified && r.taskId !== row.taskId)
-    const savePromises = otherModifiedRows.map(r => {
-      if (r._modified) {
-        if (r.recordId) {
-          return reportApi.updateRecord(r.recordId, {
-            current_content: r.currentContent,
-            next_plan: r.nextPlan,
-            task_progress: r.taskProgress
-          })
-        } else {
-          return reportApi.createRecord({
-            task_id: r.taskId,
-            month: selectedMonth.value,
-            current_content: r.currentContent,
-            next_plan: r.nextPlan,
-            task_progress: r.taskProgress
-          }).then(res => {
-            
-            r.recordId = res.id
-            r._modified = false
+    // Save all tasks that have local edits (except the current one)
+    const tasksToSave = Object.keys(localEdits.value)
+      .map(taskId => parseInt(taskId))
+      .filter(taskId => taskId !== row.taskId)
 
-
-            return res
-          })
-        }
+    const savePromises = tasksToSave.map(async taskId => {
+      const edit = localEdits.value[taskId]
+      const recordId = records.value[taskId]?.id
+      if (recordId) {
+        return reportApi.updateRecord(recordId, {
+          current_content: edit.currentContent,
+          next_plan: edit.nextPlan,
+          task_progress: edit.taskProgress
+        })
+      } else {
+        return reportApi.createRecord({
+          task_id: taskId,
+          month: selectedMonth.value,
+          current_content: edit.currentContent,
+          next_plan: edit.nextPlan,
+          task_progress: edit.taskProgress
+        })
       }
     })
-    await Promise.all(savePromises)
-    otherModifiedRows.forEach(r => r._modified = false)
+    const saveResults = await Promise.all(savePromises)
 
-    // 保存当前行
-    if (!row.recordId) {
+    // Update records for saved tasks
+    tasksToSave.forEach((taskId, i) => {
+      records.value[taskId] = saveResults[i]
+    })
+
+    // Save and submit the current row
+    let currentRecordId = row.recordId
+    if (!currentRecordId) {
       const res = await reportApi.createRecord({
         task_id: row.taskId,
         month: selectedMonth.value,
@@ -471,24 +454,28 @@ async function submitRow(row) {
         next_plan: row.nextPlan,
         task_progress: row.taskProgress
       })
-      row.recordId = res.id
-      allData.value.forEach(r => {
-        if (r.taskId === row.taskId) {
-          r.recordId = res.id
-        }
-      })
+      currentRecordId = res.id
+      records.value[row.taskId] = res
     } else {
-      await reportApi.updateRecord(row.recordId, {
+      const res = await reportApi.updateRecord(currentRecordId, {
         current_content: row.currentContent,
         next_plan: row.nextPlan,
         task_progress: row.taskProgress
       })
+      records.value[row.taskId] = res
     }
 
-    // 提交
-    await reportApi.submitRecord(row.recordId)
+    // Submit
+    const submitRes = await reportApi.submitRecord(currentRecordId)
+    records.value[row.taskId] = submitRes
+
+    // Clear all local edits
+    const newLocalEdits = { ...localEdits.value }
+    tasksToSave.forEach(taskId => delete newLocalEdits[taskId])
+    delete newLocalEdits[row.taskId]
+    localEdits.value = newLocalEdits
+
     ElMessage.success('提交成功')
-    await fetchRecords()
   } catch (e) {
     ElMessage.error('提交失败：' + (e.response?.data?.detail || e.message))
   }
