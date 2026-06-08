@@ -211,9 +211,9 @@ async def notify_first_approvers(
 
         title = "📋 新的重点工作任务进展待审批"
         desc = '<div class="gray">'
-        desc += f"填报人：{submitter_name}<br/>"
-        desc += f"任务名称：{task_name}<br/>"
-        desc += f"填报月份：{month}<br/>"
+        desc += f"填报人：{submitter_name} "
+        desc += f"任务名称：{task_name} "
+        desc += f"填报月份：{month} "
         desc += f"工作进展：{_truncate(task_progress or '', 100)}"
         desc += "</div>"
 
@@ -252,10 +252,10 @@ async def notify_second_approver(
 
         title = "📋 新的重点工作任务进展待审批"
         desc = '<div class="gray">'
-        desc += f"填报人：{submitter_name}<br/>"
-        desc += f"一级审批人：{first_reviewer_name}<br/>"
-        desc += f"任务名称：{task_name}<br/>"
-        desc += f"填报月份：{month}<br/>"
+        desc += f"填报人：{submitter_name} "
+        desc += f"一级审批人：{first_reviewer_name} "
+        desc += f"任务名称：{task_name} "
+        desc += f"填报月份：{month} "
         desc += f"工作进展：{_truncate(task_progress or '', 100)}"
         desc += "</div>"
 
