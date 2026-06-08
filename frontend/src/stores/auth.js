@@ -12,6 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isLeader = computed(() => user.value?.roles?.includes('leader'))
   const isFiller = computed(() => user.value?.roles?.includes('filler'))
   const fillerSequences = computed(() => user.value?.filler_sequences || [])
+  const approverSequences = computed(() => user.value?.approver_sequences || [])
 
   async function login(username, password) {
     const formData = new FormData()
@@ -32,5 +33,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('user')
   }
 
-  return { token, user, isLoggedIn, isAdmin, isApprover, isLeader, isFiller, fillerSequences, login, logout }
+  return { token, user, isLoggedIn, isAdmin, isApprover, isLeader, isFiller, fillerSequences, approverSequences, login, logout }
 })

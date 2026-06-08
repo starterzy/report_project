@@ -321,9 +321,17 @@ function statusText(status) {
 }
 
 function canEditRow(row) {
-  // admin 和 approver 可以编辑所有行
-  if (authStore.isAdmin || authStore.isApprover) {
+  // admin 可以编辑所有行
+  if (authStore.isAdmin) {
     return true
+  }
+  // approver 只能编辑其审批序号匹配的行
+  if (authStore.isApprover) {
+    const sequences = authStore.approverSequences
+    if (!sequences || sequences.length === 0) {
+      return true
+    }
+    return sequences.includes(row.sequence)
   }
   // filler 根据 filler_sequences 判断权限
   if (authStore.isFiller) {
@@ -332,7 +340,6 @@ function canEditRow(row) {
     if (!sequences || sequences.length === 0) {
       return true
     }
-    // 如果设置了的限制序列，检查当前行序号是否在允许范围内
     return sequences.includes(row.sequence)
   }
   // 其他角色（leader）不允许编辑
