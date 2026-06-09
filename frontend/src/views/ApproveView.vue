@@ -24,7 +24,7 @@
       </el-form-item>
     </el-form>
 
-    <el-table :data="records" stripe border height="95%" class="compact-table">
+    <el-table :data="records" stripe border v-loading="loading" class="compact-table">
       <el-table-column prop="task_sequence" label="序号" width="60" align="center" />
       <el-table-column prop="target" label="主要目标任务" min-width="200" show-overflow-tooltip />
       <el-table-column prop="submitter_name" label="填报人" width="100" align="center" />
@@ -141,6 +141,7 @@ const authStore = useAuthStore()
 const selectedMonth = ref(new Date().toISOString().slice(0, 7))
 const statusFilter = ref('')
 const records = ref([])
+const loading = ref(false)
 
 function statusType(status) {
   const map = { draft: 'info', submitted: 'warning', first_approved: 'warning', approved: 'success', rejected: 'danger' }
@@ -153,6 +154,7 @@ function statusText(status) {
 }
 
 async function fetchRecords() {
+  loading.value = true
   try {
     const params = { month: selectedMonth.value }
     if (statusFilter.value) {
@@ -160,14 +162,10 @@ async function fetchRecords() {
     }
     let allRecords = await reportApi.getRecords(params)
     // 审批者只能看到自己有权限审批的记录
-    console.log(authStore.user)
     if (authStore.isApprover && !authStore.isAdmin) {
       const sequences = authStore.user?.approver_sequences || []
       const userId = authStore.user?.id
-      console.log(sequences)
-      console.log(userId)
       allRecords = allRecords.filter(r => {
-        console.log(r)
         // submitted状态：需要是一级审批者（序号在权限列表中）才能审批
         if (r.status === 'submitted' && sequences.includes(r.task_sequence)) {
           return true
@@ -187,6 +185,8 @@ async function fetchRecords() {
     records.value = allRecords
   } catch (e) {
     console.error(e)
+  } finally {
+    loading.value = false
   }
 }
 

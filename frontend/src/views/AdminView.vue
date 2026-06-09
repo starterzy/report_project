@@ -347,18 +347,19 @@ async function fetchTaskReminders() {
     const users = await userApi.getUsers()
     activeUsers.value = users.filter(u => u.is_active)
 
-    // 并行加载每个任务的提醒人
-    const tasksWithReminders = await Promise.all(
-      allTasks.map(async (task) => {
-        try {
-          const resp = await userApi.getTaskReminderPersons(task.id)
-          return { ...task, selectedReminderIds: resp.user_ids || [] }
-        } catch {
-          return { ...task, selectedReminderIds: [] }
-        }
-      })
-    )
-    reminderTasks.value = tasksWithReminders
+    // 批量获取所有任务的提醒人（一次请求代替 N 次）
+    const remindersMap = {}
+    try {
+      const allReminders = await userApi.getAllTaskReminderPersons(reminderYear.value)
+      allReminders.forEach(r => { remindersMap[r.task_id] = r.user_ids })
+    } catch {
+      // fallback: 初始化为空
+    }
+
+    reminderTasks.value = allTasks.map(task => ({
+      ...task,
+      selectedReminderIds: remindersMap[task.id] || []
+    }))
   } catch (e) {
     console.error(e)
     ElMessage.error('加载任务提醒设置失败')

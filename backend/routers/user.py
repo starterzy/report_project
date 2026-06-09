@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from backend.models import get_db, User, Department, UserDepartment, UserApproverSequence, UserFillerSequence, RoleEnum, Task, TaskReminderPerson
@@ -311,3 +311,22 @@ async def set_task_reminder_persons(
     db.commit()
 
     return ReminderPersonsResponse(task_id=task_id, user_ids=unique_ids)
+
+
+@router.get("/tasks/reminder-persons", response_model=list[ReminderPersonsResponse])
+async def get_all_task_reminder_persons(
+    year: int = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """批量获取某年度所有任务的提醒人列表（Admin only）"""
+    user_role = current_user.roles.value if hasattr(current_user.roles, 'value') else str(current_user.roles)
+    if user_role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    tasks = db.query(Task).filter(Task.year == year).all()
+    result = []
+    for task in tasks:
+        user_ids = [rp.user_id for rp in task.reminder_persons]
+        result.append(ReminderPersonsResponse(task_id=task.id, user_ids=user_ids))
+    return result

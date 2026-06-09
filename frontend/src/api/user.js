@@ -29,6 +29,10 @@ export const userApi = {
     return api.get(`/api/users/tasks/${taskId}/reminder-persons`)
   },
 
+  getAllTaskReminderPersons(year) {
+    return api.get('/api/users/tasks/reminder-persons', { params: { year } })
+  },
+
   setTaskReminderPersons(taskId, userIds) {
     return api.put(`/api/users/tasks/${taskId}/reminder-persons`, { user_ids: userIds })
   }
