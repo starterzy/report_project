@@ -4,5 +4,6 @@ Description=Report Fill Check Reminder
 [Service]
 Type=oneshot
 User=root
-WorkingDirectory=/root/report_project/backend
-ExecStart=/usr/bin/python3 /root/report_project/backend/send_fill_reminders.py --mode check
+WorkingDirectory=/root/report_project
+Environment=PYTHONPATH=.
+ExecStart=/root/miniconda3/bin/python backend/send_fill_reminders.py --mode check
