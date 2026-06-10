@@ -1,0 +1,9 @@
+[Unit]
+Description=Report Fill 5th Reminder
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/report_project
+Environment=PYTHONPATH=.
+ExecStart=/root/miniconda3/bin/python backend/send_fill_reminders.py --mode monthly
