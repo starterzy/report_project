@@ -2,7 +2,7 @@
 Description=Report Fill Monthly Reminder Timer
 
 [Timer]
-OnCalendar=*-*-08 09:00:00
+OnCalendar=*-*-08 09:00:00 Asia/Shanghai
 
 [Install]
 WantedBy=timers.target

@@ -33,7 +33,7 @@
           <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="本月工作内容" min-width="200">
+      <el-table-column label="上月工作内容" min-width="200">
         <template #default="{ row }">
           <span v-if="row.status === 'approved' && !authStore.isAdmin" class="cell-text">{{ row.current_content || '-' }}</span>
           <el-input
@@ -48,7 +48,7 @@
           />
         </template>
       </el-table-column>
-      <el-table-column label="下月工作计划" min-width="200">
+      <el-table-column label="本月工作计划" min-width="200">
         <template #default="{ row }">
           <span v-if="row.status === 'approved' && !authStore.isAdmin" class="cell-text">{{ row.next_plan || '-' }}</span>
           <el-input
@@ -91,9 +91,14 @@
       <el-table-column label="操作" width="200" fixed="right" align="center">
         <template #default="{ row }">
           <template v-if="row.status === 'submitted'">
-            <el-button v-if="row.task_second_approver_id" type="success" size="small" @click="approveRecord(row)">提交二级</el-button>
-            <el-button v-else type="success" size="small" @click="approveRecord(row)">通过</el-button>
-            <el-button type="danger" size="small" @click="rejectRecord(row)">退回</el-button>
+            <template v-if="isSecondNotFirst(row)">
+              <span style="color: #909399">待一级审批</span>
+            </template>
+            <template v-else>
+              <el-button v-if="row.task_second_approver_id" type="success" size="small" @click="approveRecord(row)">提交二级</el-button>
+              <el-button v-else type="success" size="small" @click="approveRecord(row)">通过</el-button>
+              <el-button type="danger" size="small" @click="rejectRecord(row)">退回</el-button>
+            </template>
           </template>
           <template v-else-if="row.status === 'first_approved'">
             <el-button type="success" size="small" @click="approveRecord(row)">通过</el-button>
@@ -153,6 +158,13 @@ function statusText(status) {
   return map[status] || status
 }
 
+function isSecondNotFirst(row) {
+  // 记录有二级审批人，且当前用户是二级审批人，但不是该序号的一级审批人
+  return row.task_second_approver_id &&
+    row.task_second_approver_id === authStore.user?.id &&
+    !(authStore.user?.approver_sequences || []).includes(row.task_sequence)
+}
+
 async function fetchRecords() {
   loading.value = true
   try {
@@ -166,9 +178,10 @@ async function fetchRecords() {
       const sequences = authStore.user?.approver_sequences || []
       const userId = authStore.user?.id
       allRecords = allRecords.filter(r => {
-        // submitted状态：需要是一级审批者（序号在权限列表中）才能审批
-        if (r.status === 'submitted' && sequences.includes(r.task_sequence)) {
-          return true
+        // submitted状态：一级审批者可审批，二级审批者可查看（显示待一级审批）
+        if (r.status === 'submitted') {
+          if (sequences.includes(r.task_sequence)) return true
+          if (r.task_second_approver_id === userId) return true
         }
         // first_approved状态：需要是二级审批人才能审批
         if (r.status === 'first_approved' && r.task_second_approver_id === userId) {

@@ -180,6 +180,7 @@ import { ElMessage } from 'element-plus'
 const authStore = useAuthStore()
 const tasks = ref([])
 const records = ref({})  // records[taskId] -> record
+const prevMonthRecords = ref({})  // prevMonthRecords[taskId] -> record (上月记录，用于回显工作进展)
 const localEdits = ref({})  // localEdits[taskId] -> { currentContent, nextPlan, taskProgress }
 const selectedMonth = ref(new Date().toISOString().slice(0, 7))
 const searchSequence = ref('')
@@ -205,6 +206,7 @@ const allData = computed(() => {
   const result = []
   tasks.value.forEach(task => {
     const taskRecord = records.value[task.id]
+    const prevRecord = prevMonthRecords.value[task.id]
     const localEdit = localEdits.value[task.id]
     task.measures.forEach((measure, measureIndex) => {
       result.push({
@@ -220,7 +222,7 @@ const allData = computed(() => {
         measureContent: measure.content,
         personLiable: measure.person_liable || '',
         specific_measure: measure.specific_measure || '',
-        taskProgress: localEdit?.taskProgress ?? taskRecord?.task_progress ?? '',
+        taskProgress: localEdit?.taskProgress ?? taskRecord?.task_progress ?? prevRecord?.task_progress ?? '',
         recordId: taskRecord?.id,
         currentContent: localEdit?.currentContent ?? taskRecord?.current_content ?? '',
         nextPlan: localEdit?.nextPlan ?? taskRecord?.next_plan ?? '',
@@ -355,21 +357,33 @@ async function fetchTasks() {
   }
 }
 
+function getPrevMonth(month) {
+  const [y, m] = month.split('-').map(Number)
+  if (m === 1) return (y - 1) + '-12'
+  return y + '-' + String(m - 1).padStart(2, '0')
+}
+
 async function fetchRecords() {
   try {
-    const res = await reportApi.getRecords({ month: selectedMonth.value })
-    // records 按 task_id 存储
+    const prevMonth = getPrevMonth(selectedMonth.value)
+    const [currentRes, prevRes] = await Promise.all([
+      reportApi.getRecords({ month: selectedMonth.value }),
+      reportApi.getRecords({ month: prevMonth })
+    ])
     const newRecords = {}
-    res.forEach(r => {
-      // 后端已按用户权限过滤，前端直接展示
+    currentRes.forEach(r => {
       newRecords[r.task_id] = r
     })
     records.value = newRecords
+    const newPrev = {}
+    prevRes.forEach(r => {
+      newPrev[r.task_id] = r
+    })
+    prevMonthRecords.value = newPrev
   } catch (e) {
     console.error(e)
   }
 }
-
 async function fetchData() {
   loading.value = true
   localEdits.value = {}

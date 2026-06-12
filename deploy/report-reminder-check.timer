@@ -2,7 +2,7 @@
 Description=Report Fill Check Reminder Timer
 
 [Timer]
-OnCalendar=*-*-10 09:00:00
+OnCalendar=*-*-10 09:00:00 Asia/Shanghai
 
 [Install]
 WantedBy=timers.target
