@@ -22,7 +22,7 @@
       </el-col>
       <el-col :span="6">
         <el-card shadow="never" class="stat-card">
-          <template #header>已完成</template>
+          <template #header>本月已完成</template>
           <div class="stat-number">{{ stats.approved }}</div>
         </el-card>
       </el-col>
@@ -60,7 +60,7 @@ const stats = computed(() => {
   const currentMonth = new Date().toISOString().slice(0, 7)
   const filledThisMonth = records.value.filter(r => r.month === currentMonth && r.status !== 'draft').length
   const pendingApproval = records.value.filter(r => r.status === 'submitted').length
-  const approved = records.value.filter(r => r.status === 'approved').length
+  const approved = records.value.filter(r => r.status === 'approved' && r.month === currentMonth).length
   return { totalTasks, filledThisMonth, pendingApproval, approved }
 })
 
