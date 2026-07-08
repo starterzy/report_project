@@ -85,6 +85,7 @@ async def get_records(
     user_role = current_user.roles.value if hasattr(current_user.roles, 'value') else str(current_user.roles)
 
     # 权限控制：基于用户的角色和任务权限过滤可查看的记录
+    # 核心规则：approved 记录对所有人开放；非 approved 记录需有任务权限
     if user_role != 'admin':
         accessible_ids = set()
 
@@ -111,15 +112,16 @@ async def get_records(
                 all_tasks = db.query(Task.id).all()
                 accessible_ids.update(t.id for t in all_tasks)
 
-        # 所有角色：如果被设为某任务的二级审批人，也可查看该任务记录
+        # 所有角色：如果被设为某任务的二级审批人，也可查看该任务记录（所有状态）
         second_approver_tasks = db.query(Task.id).filter(Task.second_approver_id == current_user.id).all()
         second_ids = [t.id for t in second_approver_tasks]
         accessible_ids.update(second_ids)
 
-        if not accessible_ids:
-            return []
-
-        query = query.filter(ReportRecord.task_id.in_(accessible_ids))
+        # 构建过滤条件：approved 记录所有人可见 + 有权限任务的非 approved 记录
+        filter_conditions = [ReportRecord.status == StatusEnum.APPROVED]
+        if accessible_ids:
+            filter_conditions.append(ReportRecord.task_id.in_(accessible_ids))
+        query = query.filter(or_(*filter_conditions))
 
         # Leader 只能看已审核记录（但其作为二级审批人的任务可看全部状态）
         if user_role == 'leader':
